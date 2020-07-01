@@ -1,8 +1,7 @@
 package io.github.sinri.Rahab.kit;
 
-import io.vertx.core.http.*;
+import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.streams.Pump;
 
 import java.util.HashMap;
 
@@ -22,14 +21,12 @@ public class HandlerForLocal extends RahabHandler {
                 cachedHeaderMap.put(entry.getKey(), entry.getValue());
             }
         });
-        cachedHeaderMap.forEach((k, v) -> {
-            this.logger.info("cachedHeaderMap [" + k + "] : " + v);
-        });
+        cachedHeaderMap.forEach((k, v) -> this.logger.info("cachedHeaderMap [" + k + "] : " + v));
         // 2. fetch domain and path
         String method = request.method().name();
         String schema = "http";
         String host = request.host();
-        Integer port = 80;
+        int port = 80;
         if (host.contains(":")) {
             String[] x = host.split(":");
             host = x[0];
@@ -69,7 +66,7 @@ public class HandlerForLocal extends RahabHandler {
                     "post",
                     RahabAgent.getRemoteAddress(),
                     RahabAgent.getRemotePort(),
-                    "handleRequestFromLocalSide",
+                    "/handleRequestFromLocalSide",
                     headerToSend,
                     object.encode()
             );

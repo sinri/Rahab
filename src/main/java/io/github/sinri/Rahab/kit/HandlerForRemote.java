@@ -13,6 +13,7 @@ public class HandlerForRemote extends RahabHandler {
 
     @Override
     public void handle() {
+        logger.info("Incoming Request: " + request.path() + " ? " + request.query());
         // 1. decode
         request.handler(buffer->{
             logger.info("囤积Body数据到Buffer，size: " + buffer.length());
@@ -22,14 +23,20 @@ public class HandlerForRemote extends RahabHandler {
         request.endHandler(event->{
             logger.info("Remote Side received: " + bodyBuffer);
 
-            if (bodyBuffer.length() < 0) {
+            if (bodyBuffer.length() <= 0) {
                 request.response()
                         .setStatusCode(200)
-                        .end("Under the sun");
+                        .end("Empty Body Found");
                 return;
             }
 
             JsonObject object = bodyBuffer.toJsonObject();
+            if (object == null) {
+                request.response()
+                        .setStatusCode(200)
+                        .end("Non Json Body Found");
+                return;
+            }
             JsonObject header = object.getJsonObject("header");
             String method = object.getString("method");
             String schema = object.getString("schema");
@@ -39,13 +46,11 @@ public class HandlerForRemote extends RahabHandler {
             String body = object.getString("body");
 
             //debug
-            request.response().write(object.toBuffer()).write("\n");
+            //request.response().write(object.toBuffer()).write("\n");
 
             // 3. execute request
             HashMap<String, String> headers = new HashMap<>();
-            header.forEach(entry -> {
-                headers.put(entry.getKey(), (String) entry.getValue());
-            });
+            header.forEach(entry -> headers.put(entry.getKey(), (String) entry.getValue()));
             this.pumpHttpRequest(
                     method,
                     host,

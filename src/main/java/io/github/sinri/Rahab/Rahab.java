@@ -7,7 +7,6 @@ import io.vertx.core.cli.CLI;
 import io.vertx.core.cli.CommandLine;
 import io.vertx.core.cli.Option;
 import io.vertx.core.cli.TypedOption;
-import io.vertx.core.logging.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
@@ -19,7 +18,7 @@ import java.util.Map;
 public class Rahab {
     public static boolean vertxLoggingOnly = false;
     public static void main(String[] args) {
-        System.out.println("By faith the harlot Rahab perished not with them that believed not, when she had received the spies with peace. (Hebrews 11:31)");
+        RahabLogger.getLogger(Rahab.class).info("By faith the harlot Rahab perished not with them that believed not, when she had received the spies with peace. (Hebrews 11:31)");
 
         CLI cli = CLI.create("Rahab")
                 .setSummary("Tear the wall of Jericho down!")
@@ -96,14 +95,14 @@ public class Rahab {
             }
 
             String configFile = commandLine.getOptionValue("config-file");
-            LoggerFactory.getLogger(Rahab.class).info("Target Config File: " + configFile);
+            RahabLogger.getLogger(Rahab.class).info("Target Config File: " + configFile);
             if (
                     configFile != null
                             && !configFile.equalsIgnoreCase("")
                             && (new File(configFile)).exists()
             ) {
                 // read config
-                LoggerFactory.getLogger(Rahab.class).info("Opening Config File: " + configFile);
+                RahabLogger.getLogger(Rahab.class).info("Opening Config File: " + configFile);
                 InputStream input = new FileInputStream(new File(configFile));
                 Yaml yaml = new Yaml();
                 Map<String, Object> loadedYaml = yaml.load(input);
@@ -112,7 +111,7 @@ public class Rahab {
                 RahabAgent.setRemoteAddress((String) loadedYaml.getOrDefault("remote-address", "127.0.0.1"));
                 RahabAgent.setRemotePort((Integer) loadedYaml.getOrDefault("remote-port", 80));
             } else {
-                LoggerFactory.getLogger(Rahab.class).info("No valid Config File, try command line");
+                RahabLogger.getLogger(Rahab.class).info("No valid Config File, try command line");
 
                 RahabAgent.setPort(commandLine.getOptionValue("listen-port"));
                 RahabAgent.setMode(commandLine.getOptionValue("mode"));
@@ -124,14 +123,14 @@ public class Rahab {
             //RahabLoggerDelegate.debugModeOpened=commandLine.isFlagEnabled("use-debug-log");
             RahabLoggerDelegate.debugModeOpened = true;
 
-            LoggerFactory.getLogger(Rahab.class).info("Config Loaded");
+            RahabLogger.getLogger(Rahab.class).info("Config Loaded");
             RahabAgent.initializeVertx(commandLine.getOptionValue("pool-size"));
 
-            RahabLogger.getLogger().info("Running Now");
+            RahabLogger.getLogger(Rahab.class).info("Running Now");
         }catch (Exception e){
             StringBuilder builder = new StringBuilder();
             cli.usage(builder);
-            System.err.println(builder.toString());
+            RahabLogger.getLogger(Rahab.class).error(builder.toString());
             System.exit(1);
         }
 

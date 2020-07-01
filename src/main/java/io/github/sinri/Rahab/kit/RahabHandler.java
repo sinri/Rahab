@@ -25,7 +25,7 @@ abstract public class RahabHandler {
         if (Rahab.vertxLoggingOnly) {
             this.logger = LoggerFactory.getLogger("RH#" + this.requestId);
         } else {
-            this.logger = RahabLogger.getLogger();
+            this.logger = RahabLogger.getLogger("RH#" + this.requestId);
         }
         // 初始化请求的本体
         this.bodyBuffer = Buffer.buffer();

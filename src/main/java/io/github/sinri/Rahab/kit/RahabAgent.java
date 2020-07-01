@@ -1,10 +1,10 @@
 package io.github.sinri.Rahab.kit;
 
+import io.github.sinri.Rahab.logger.RahabLogger;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.logging.LoggerFactory;
 
 public class RahabAgent {
     public final static String MODE_LOCAL_AGENT="LOCAL";
@@ -48,7 +48,7 @@ public class RahabAgent {
     public static void initializeVertx(int poolSize) {
         vertx = Vertx.vertx(new VertxOptions().setWorkerPoolSize(poolSize));
 
-        LoggerFactory.getLogger(RahabAgent.class).info("initializeVertx done");
+        RahabLogger.getLogger(RahabAgent.class).info("initializeVertx done");
     }
 
     public static Vertx getVertx() {
@@ -72,7 +72,7 @@ public class RahabAgent {
         HttpServer gatewayServer = getVertx().createHttpServer(options);
         // 如果网关服务器出现异常，则进行处理
         gatewayServer.exceptionHandler(exception -> {
-            LoggerFactory.getLogger(this.getClass()).info("网关HTTP服务出现异常", exception);
+            RahabLogger.getLogger(this.getClass()).info("网关HTTP服务出现异常", exception);
         });
 
         // 网关服务器处理请求
@@ -91,14 +91,14 @@ public class RahabAgent {
                 }
             } catch (Exception e) {
                 //e.printStackTrace();
-                LoggerFactory.getLogger(this.getClass()).error("大势已去。" + e.getMessage());
+                RahabLogger.getLogger(this.getClass()).error("大势已去。" + e.getMessage());
             }
         }).listen(port, server -> {
             if (server.succeeded()) {
-                LoggerFactory.getLogger(this.getClass()).info("HTTP服务已经站立在服务器上。端口:" + port + "。");
+                RahabLogger.getLogger(this.getClass()).info("HTTP服务已经站立在服务器上。端口:" + port + "。");
             }
             if (server.failed()) {
-                LoggerFactory.getLogger(this.getClass()).error("HTTP服务无法站立在服务器上。端口:" + port + "。" + server.cause().getMessage());
+                RahabLogger.getLogger(this.getClass()).error("HTTP服务无法站立在服务器上。端口:" + port + "。" + server.cause().getMessage());
                 throw new RuntimeException(server.cause());
             }
         });
