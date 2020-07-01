@@ -83,19 +83,26 @@ public class RahabAgent {
                 if(mode.equals(MODE_LOCAL_AGENT)){
                     // local work: cache the request and send to remote
                     (new HandlerForLocal(request)).handle();
-                }else if (mode.equals(MODE_REMOTE_AGENT)){
+                } else if (mode.equals(MODE_REMOTE_AGENT)) {
                     // remote work: rebuild the cached request and execute
                     (new HandlerForRemote(request)).handle();
-                }else{
-                    throw new Exception("The mode "+mode+" is not supported");
+                } else {
+                    throw new Exception("The mode " + mode + " is not supported");
                 }
             } catch (Exception e) {
                 //e.printStackTrace();
                 LoggerFactory.getLogger(this.getClass()).error("大势已去。" + e.getMessage());
             }
-        }).listen(port);
+        }).listen(port, server -> {
+            if (server.succeeded()) {
+                LoggerFactory.getLogger(this.getClass()).info("HTTP服务已经站立在服务器上。端口:" + port + "。");
+            }
+            if (server.failed()) {
+                LoggerFactory.getLogger(this.getClass()).error("HTTP服务无法站立在服务器上。端口:" + port + "。" + server.cause().getMessage());
+                throw new RuntimeException(server.cause());
+            }
+        });
 
-        LoggerFactory.getLogger(this.getClass()).info("新的网关HTTP服务已经站立在服务器上。端口:"+port+"。");
 
     }
 }

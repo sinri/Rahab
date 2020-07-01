@@ -1,5 +1,7 @@
 package io.github.sinri.Rahab.kit;
 
+import io.github.sinri.Rahab.Rahab;
+import io.github.sinri.Rahab.logger.RahabLogger;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.*;
 import io.vertx.core.logging.Logger;
@@ -16,19 +18,22 @@ abstract public class RahabHandler {
     protected final Buffer bodyBuffer;
     protected HttpServerRequest request;
 
-    public RahabHandler(HttpServerRequest request){
-        this.request=request;
+    public RahabHandler(HttpServerRequest request) {
+        this.request = request;
         this.requestId = UUID.randomUUID().toString();
 
-        this.logger = LoggerFactory.getLogger("RH#" + this.requestId);
-
+        if (Rahab.vertxLoggingOnly) {
+            this.logger = LoggerFactory.getLogger("RH#" + this.requestId);
+        } else {
+            this.logger = RahabLogger.getLogger();
+        }
         // 初始化请求的本体
         this.bodyBuffer = Buffer.buffer();
 
         // 设定请求出现问题时的回调。此处直接关闭请求。
         request.exceptionHandler(exception -> {
             logger.error("网关请求中出现异常", exception);
-            abandonIncomingRequest(500,exception.getMessage());
+            abandonIncomingRequest(500, exception.getMessage());
         });
     }
 
