@@ -26,7 +26,7 @@ public class Rahab {
                         new TypedOption<String>()
                                 .setLongName("config-file")
                                 .setShortName("c")
-                                .setDescription("给定配置文件，否则使用默认配置。")
+                                .setDescription("Config YAML File")
                                 .setDefaultValue("/app/config/rahab-remote.yml")
                                 .setRequired(false)
                                 .setType(String.class)
@@ -80,17 +80,28 @@ public class Rahab {
                         .setLongName("use-vertx-log-only")
                         .setShortName("v")
                         .setDescription("Only use vertx standard logging")
-                        .setFlag(true))
+                        .setFlag(true)
+                )
 //                .addOption(new Option()
 //                        .setLongName("use-debug-log")
 //                        .setShortName("d")
 //                        .setDescription("enables debug logging support")
 //                        .setFlag(true))
+                .addOption(
+                        new Option()
+                                .setLongName("help")
+                                .setShortName("h")
+                                .setDescription("Help and Usages")
+                                .setFlag(true)
+                                .setHelp(true)
+                )
                 ;
 
         try {
             CommandLine commandLine = cli.parse(Arrays.asList(args));
-            if (!commandLine.isValid() && commandLine.isAskingForHelp()) {
+            if (!commandLine.isValid() || commandLine.isAskingForHelp()) {
+                StringBuilder builder = new StringBuilder();
+                cli.usage(builder);
                 throw new Exception("Emmm...");
             }
 
