@@ -1,12 +1,16 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.RahabHttpProxy;
 import io.github.sinri.Rahab.v2.WormholeProxy;
+import io.github.sinri.Rahab.v2.transform.HttpRequestTransformPair;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 
-public class Test3 {
+public class WormholeProxyLocalTest {
+    /**
+     * listen on 22222 (raw->encoded)->(encoded->raw) 44444 (-> 33333)
+     * @param args
+     */
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
         Keel.initializeVertx(
@@ -21,7 +25,8 @@ public class Test3 {
                         )
         );
 
-        new WormholeProxy("127.0.0.1",33333)
+        new WormholeProxy("127.0.0.1",44444)
+                .encodingPair(new HttpRequestTransformPair("fake.com"),false)
                 .listen(22222);
     }
 }

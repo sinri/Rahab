@@ -8,7 +8,6 @@ import io.vertx.core.dns.AddressResolverOptions;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetServer;
 import io.vertx.core.net.NetSocket;
-import io.vertx.core.streams.Pump;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Test2 {
+public class RahabHttpProxyTest {
     /*
      * 1.[B->P] CONNECT imququ.com:443 HTTP/1.1
      * 1.[B<-P] HTTP/1.1 200 Connection Established
@@ -24,6 +23,10 @@ public class Test2 {
      * 2.[B<-P<-S] ...
      */
 
+    /**
+     * listen on 33333
+     * @param args
+     */
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
         Keel.initializeVertx(
