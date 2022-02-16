@@ -13,6 +13,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * HTTP Proxy
+ * {浏览器} ←[代理通讯]→ {代理服务器 ↔ 中介客户端} ←[自由通讯]→ {目标服务器}
+ */
 public class RahabHttpProxy {
     /**
      * 代理服务器
@@ -105,8 +109,6 @@ public class RahabHttpProxy {
 
                             proxySocket.write("HTTP/1.1 200 Connection Established\r\n\r\n")
                                     .onSuccess(v -> {
-//                                        Pump.pump(actualServerSocket.get(), proxySocket);
-//                                        Pump.pump(proxySocket, actualServerSocket.get());
                                         workerLogger.info("代理通讯 成功向浏览器发送 Connection Established 数据包, 准备开始代理服务");
                                         atomicConnectionEstablished.set(true);
                                     })
