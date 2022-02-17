@@ -1,7 +1,6 @@
 package io.github.sinri.Rahab.test.v2;
 
 import io.github.sinri.keel.Keel;
-import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
@@ -29,7 +28,8 @@ public class ActualServerRunner {
                             "<body>" +
                             "<h1>I'm the Rahab!</h1>" +
                             "<p>port is 443</p>" +
-                            "<p>"+req.host()+"</p>"+
+                            "<p>" + req.host() + "</p>" +
+                            "<p>" + req.path() + "</p>" +
                             "</body>" +
                             "</html>"
                     );

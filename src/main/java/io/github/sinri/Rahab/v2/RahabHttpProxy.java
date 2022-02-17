@@ -1,6 +1,7 @@
 package io.github.sinri.Rahab.v2;
 
 import io.github.sinri.keel.Keel;
+import io.github.sinri.keel.core.logger.KeelLogLevel;
 import io.github.sinri.keel.core.logger.KeelLogger;
 import io.vertx.core.Future;
 import io.vertx.core.net.NetClient;
@@ -42,8 +43,8 @@ public class RahabHttpProxy {
      * @param proxySocket 代理通讯
      */
     private void proxyServerConnectHandler(NetSocket proxySocket) {
-        String requestID = UUID.randomUUID().toString().replace("-","");
-        KeelLogger workerLogger = Keel.logger("HttpProxyWorker").setCategoryPrefix(requestID);
+        String requestID = UUID.randomUUID().toString().replace("-", "");
+        KeelLogger workerLogger = Keel.standaloneLogger("HttpProxyWorker").setCategoryPrefix(requestID);
 
         workerLogger.notice("建立了一个新的 代理通讯 服务浏览器 " + proxySocket.remoteAddress().toString());
 
@@ -52,7 +53,8 @@ public class RahabHttpProxy {
 
         proxySocket
                 .handler(buffer -> {
-                    workerLogger.debug("代理通讯 接收到 浏览器发来的数据包: " + buffer);
+                    workerLogger.info("代理通讯 接收到 浏览器发来的数据包 " + buffer.length() + " 字节");
+                    workerLogger.print(KeelLogLevel.DEBUG, buffer.toString());
                     if (atomicConnectionEstablished.get()) {
                         // 双边通讯已经完成，双向转发数据即可
                         atomicFreedomSocket.get().write(buffer)
@@ -95,7 +97,8 @@ public class RahabHttpProxy {
 
                             freedomSocket
                                     .handler(bufferReadFromActualServer -> {
-                                        workerLogger.debug("自由通讯 读取到来自目标服务器的数据包，由 代理通讯 转发给浏览器: " + bufferReadFromActualServer);
+                                        workerLogger.debug("自由通讯 读取到来自目标服务器的数据包，由 代理通讯 转发给浏览器 " + bufferReadFromActualServer.length() + " 字节");
+                                        workerLogger.print(KeelLogLevel.DEBUG, bufferReadFromActualServer.toString());
                                         proxySocket.write(bufferReadFromActualServer);
                                     })
                                     .exceptionHandler(throwable -> {

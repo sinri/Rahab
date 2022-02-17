@@ -1,15 +1,12 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.Wormhole;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.dns.AddressResolverOptions;
+import io.vertx.core.net.NetServer;
 
-public class WormholeProxyRemoteTest {
-    /**
-     * listen on (22222 ->) 44444 -> 33333
-     * @param args
-     */
+public class EchoServerTest {
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
         Keel.initializeVertx(
@@ -24,8 +21,14 @@ public class WormholeProxyRemoteTest {
                         )
         );
 
-        new Wormhole("远程", "127.0.0.1", 33333)
-                //.encodingPair(new HttpRequestTransformer("fake.com"),true)
-                .listen(44444);
+        NetServer echoServer = Keel.getVertx().createNetServer();
+
+        echoServer.connectHandler(socket -> {
+            socket.handler(buffer -> {
+                Buffer bufferToEcho = Buffer.buffer();
+                bufferToEcho.appendString("Received: ").appendBuffer(buffer);
+                socket.write(bufferToEcho);
+            });
+        }).listen(33333);
     }
 }

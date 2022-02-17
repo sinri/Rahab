@@ -1,7 +1,6 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.WormholeProxy;
-import io.github.sinri.Rahab.v2.transform.HttpRequestTransformPair;
+import io.github.sinri.Rahab.v2.Wormhole;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
@@ -25,8 +24,8 @@ public class WormholeProxyLocalTest {
                         )
         );
 
-        new WormholeProxy("127.0.0.1",44444)
-                .encodingPair(new HttpRequestTransformPair("fake.com"),false)
-                .listen(22222);
+        new Wormhole("本地", "127.0.0.1", 44444)
+                //.encodingPair(new HttpRequestTransformer("fake.com"),false)
+                .listen(55555);
     }
 }

@@ -49,6 +49,28 @@
                     <source>11</source>
                     <target>11</target>
                 </configuration>
+                <version>3.8.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.4.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>io.github.sinri.Rahab.Rahab</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -65,11 +87,11 @@
             <version>4.2.4</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.yaml/snakeyaml -->
-        <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <version>1.23</version>
-        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>org.yaml</groupId>-->
+        <!--            <artifactId>snakeyaml</artifactId>-->
+        <!--            <version>1.23</version>-->
+        <!--        </dependency>-->
         <!--        <dependency>-->
         <!--            <groupId>com.alibaba</groupId>-->
         <!--            <artifactId>fastjson</artifactId>-->
@@ -77,16 +99,16 @@
         <!--        </dependency>-->
     </dependencies>
 
-    <distributionManagement>
-        <repository>
-            <id>oss-sonatype-staging</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
-        </repository>
-        <snapshotRepository>
-            <id>oss-sonatype-snapshots</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
+    <!--    <distributionManagement>-->
+    <!--        <repository>-->
+    <!--            <id>oss-sonatype-staging</id>-->
+    <!--            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>-->
+    <!--        </repository>-->
+    <!--        <snapshotRepository>-->
+    <!--            <id>oss-sonatype-snapshots</id>-->
+    <!--            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>-->
+    <!--        </snapshotRepository>-->
+    <!--    </distributionManagement>-->
 
 
     <properties>
