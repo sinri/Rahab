@@ -50,8 +50,8 @@ public class Rahab {
 
         KeelLogger mainLogger = Keel.outputLogger("RahabMain");
 
-        CLI mainCLI = CLI.create("RahabV2")
-                .setSummary("Rahab 2 启动命令")
+        CLI mainCLI = CLI.create("Rahab-2.1.jar")
+                .setSummary("Rahab 2.1 启动命令")
                 .addOption(new Option()
                         .setLongName("help")
                         .setShortName("h")
@@ -178,7 +178,7 @@ public class Rahab {
         }
 
         StringBuilder builder = new StringBuilder();
-        mainCLI.usage(builder);
+        mainCLI.usage(builder, "java -jar");
         mainLogger.print(builder.toString());
         System.exit(1);
     }
