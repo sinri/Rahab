@@ -1,10 +1,13 @@
 package io.github.sinri.Rahab.test.v2;
 
 import io.github.sinri.keel.Keel;
+import io.github.sinri.keel.core.logger.KeelLogger;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.dns.AddressResolverOptions;
+import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetServer;
+import io.vertx.core.net.NetSocket;
 
 public class EchoServerTest {
     public static void main(String[] args) {
@@ -30,5 +33,38 @@ public class EchoServerTest {
                 socket.write(bufferToEcho);
             });
         }).listen(33333);
+
+        NetClient netClient = Keel.getVertx().createNetClient();
+
+        for (var i = 0; i < 10; i++) {
+            KeelLogger logger = Keel.outputLogger("Client-" + i);
+
+            int finalI = i;
+            netClient.connect(33333, "127.0.0.1", netSocketAsyncResult -> {
+                if (netSocketAsyncResult.failed()) {
+                    logger.exception(netSocketAsyncResult.cause());
+                    return;
+                }
+
+                NetSocket clientSocket = netSocketAsyncResult.result();
+                clientSocket.handler(buffer -> {
+                            logger.info("Response: " + buffer);
+                        })
+                        .exceptionHandler(throwable -> {
+                            logger.exception(throwable);
+                        })
+                        .closeHandler(v -> {
+                            logger.notice("close");
+                        });
+                clientSocket.write("I am Client " + finalI)
+                        .onComplete(voidAsyncResult -> {
+                            if (voidAsyncResult.failed()) {
+                                logger.exception("write failed", voidAsyncResult.cause());
+                            } else {
+                                logger.info("written");
+                            }
+                        });
+            });
+        }
     }
 }

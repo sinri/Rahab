@@ -23,6 +23,10 @@ public class RahabHttpProxy {
      * 代理服务器
      */
     private final NetServer proxyServer;
+    private final NetClient freedomClient;
+
+//    private WormholeTransformer transformerForDataFromLocal;
+//    private WormholeTransformer transformerForDataFromRemote;
 
     protected KeelLogger proxyLogger = Keel.logger("RahabHttpProxy");
     private static final Pattern patternForConnectRequest = Pattern.compile("CONNECT (.+):(\\d+) HTTP/1.1");
@@ -33,7 +37,20 @@ public class RahabHttpProxy {
                 .exceptionHandler(throwable -> {
                     proxyLogger.exception("代理服务器 出现故障", throwable);
                 });
+        this.freedomClient = Keel.getVertx().createNetClient();
+//        this.transformerForDataFromLocal = null;
+//        this.transformerForDataFromRemote = null;
     }
+
+//    public RahabHttpProxy setTransformerForDataFromRemote(WormholeTransformer transformerForDataFromRemote) {
+//        this.transformerForDataFromRemote = transformerForDataFromRemote;
+//        return this;
+//    }
+//
+//    public RahabHttpProxy setTransformerForDataFromLocal(WormholeTransformer transformerForDataFromLocal) {
+//        this.transformerForDataFromLocal = transformerForDataFromLocal;
+//        return this;
+//    }
 
     public Future<NetServer> listen(int proxyPort) {
         return this.proxyServer.listen(proxyPort);
@@ -52,12 +69,13 @@ public class RahabHttpProxy {
         AtomicReference<NetSocket> atomicFreedomSocket = new AtomicReference<>();
 
         proxySocket
-                .handler(buffer -> {
-                    workerLogger.info("代理通讯 接收到 浏览器发来的数据包 " + buffer.length() + " 字节");
-                    workerLogger.print(KeelLogLevel.DEBUG, buffer.toString());
+                .handler(bufferFromClient -> {
+                    workerLogger.info("代理通讯 接收到 浏览器发来的数据包 " + bufferFromClient.length() + " 字节");
+                    workerLogger.print(KeelLogLevel.DEBUG, bufferFromClient.toString());
+
                     if (atomicConnectionEstablished.get()) {
                         // 双边通讯已经完成，双向转发数据即可
-                        atomicFreedomSocket.get().write(buffer)
+                        atomicFreedomSocket.get().write(bufferFromClient)
                                 .onSuccess(v -> {
                                     workerLogger.info("代理通讯 通过 自由通讯 转发给目标服务器 成功");
                                 })
@@ -67,8 +85,8 @@ public class RahabHttpProxy {
                                 });
                     } else {
                         // 代理通讯 请求建立 自由通讯
-
-                        Matcher matcherForConnectRequest = patternForConnectRequest.matcher(buffer.toString());
+                        // 解析CONNECT请求并获取目标服务的地址和端口
+                        Matcher matcherForConnectRequest = patternForConnectRequest.matcher(bufferFromClient.toString());
                         String host;
                         int port;
                         if (matcherForConnectRequest.find()) {
@@ -80,9 +98,8 @@ public class RahabHttpProxy {
                             return;
                         }
 
-                        // 中介客户端
-                        NetClient freedomClient = Keel.getVertx().createNetClient();
-                        workerLogger.notice("中介客户端 完成初始化 面向 目标服务器（" + host + ":" + port + "）");
+                        // 使用 中介客户端 发起对目标服务的连接
+                        workerLogger.notice("中介客户端 准备连接 目标服务器（" + host + ":" + port + "）");
                         freedomClient.connect(port, host, netSocketAsyncResult -> {
                             if (netSocketAsyncResult.failed()) {
                                 workerLogger.exception("中介客户端 无法连接 目标服务器，代理通讯 即将关闭", netSocketAsyncResult.cause());

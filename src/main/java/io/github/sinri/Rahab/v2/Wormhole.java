@@ -26,6 +26,10 @@ public class Wormhole {
      * 近端服务器
      */
     protected NetServer localServer;
+    /**
+     * 远端客户端
+     */
+    protected NetClient remoteClient;
 
     private final String wormholeName;
     private final String destinationHost;
@@ -41,6 +45,7 @@ public class Wormhole {
         localServer = Keel.getVertx().createNetServer();
         this.transformerForDataFromLocal = null;
         this.transformerForDataFromRemote = null;
+        this.remoteClient = Keel.getVertx().createNetClient();
     }
 
     /**
@@ -73,12 +78,12 @@ public class Wormhole {
 
                     wormholeLogger.notice("近端通讯 已建立 对方地址 " + localSocket.remoteAddress().toString() + " 我方地址 " + localSocket.localAddress().toString());
 
-                    AtomicReference<NetClient> atomicRemoteClient = new AtomicReference<>();
+//                    AtomicReference<NetClient> atomicRemoteClient = new AtomicReference<>();
                     AtomicReference<NetSocket> atomicRemoteSocket = new AtomicReference<>();
 
                     // 远端客户端
-                    NetClient remoteClient = Keel.getVertx().createNetClient();
-                    atomicRemoteClient.set(remoteClient);
+//                    NetClient remoteClient = Keel.getVertx().createNetClient();
+//                    atomicRemoteClient.set(remoteClient);
 
                     remoteClient.connect(this.destinationPort, this.destinationHost, netSocketAsyncResult -> {
                         if (netSocketAsyncResult.failed()) {
@@ -153,8 +158,9 @@ public class Wormhole {
                                     remoteSocket.close();
                                 })
                                 .closeHandler(v -> {
-                                    wormholeLogger.notice("远端通讯 关闭；远端客户端 即将关闭");
-                                    remoteClient.close();
+                                    wormholeLogger.notice("远端通讯 关闭");
+//                                    wormholeLogger.notice("远端通讯 关闭；远端客户端 即将关闭");
+//                                    remoteClient.close();
                                 });
                     });
 
@@ -231,10 +237,14 @@ public class Wormhole {
                             })
                             .closeHandler(v -> {
                                 wormholeLogger.notice("近端通讯 关闭");
-                                if (atomicRemoteClient.get() != null) {
+                                if (atomicRemoteSocket.get() != null) {
                                     wormholeLogger.notice("远端通讯 即将关闭");
-                                    atomicRemoteClient.get().close();
+                                    atomicRemoteSocket.get().close();
                                 }
+//                                if (atomicRemoteClient.get() != null) {
+//                                    wormholeLogger.notice("远端通讯 即将关闭");
+//                                    atomicRemoteClient.get().close();
+//                                }
                             });
                 })
                 .exceptionHandler(throwable -> {
