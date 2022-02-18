@@ -94,6 +94,7 @@ public class RahabHttpProxy {
                             port = Integer.parseInt(matcherForConnectRequest.group(2));
                         } else {
                             workerLogger.warning("代理通讯 无法解析浏览器发来的数据包为CONNECTION请求，代理通讯 即将关闭");
+                            workerLogger.debug(bufferFromClient.toString());
                             proxySocket.close();
                             return;
                         }

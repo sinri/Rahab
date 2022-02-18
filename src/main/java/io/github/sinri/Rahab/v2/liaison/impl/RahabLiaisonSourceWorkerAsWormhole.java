@@ -50,6 +50,7 @@ public class RahabLiaisonSourceWorkerAsWormhole implements RahabLiaisonSourceWor
                                                 this.close();
                                             } else {
                                                 logger.info("RahabLiaisonSourceWorkerAsWormhole 自 虫洞 往 情报源 搬运打包后的数据 成功 " + bufferToBroker.length() + "字节 其中来自虫洞的数据 " + bufferFromWormhole.length() + " 字节");
+                                                logger.debug(bufferToBroker.toString());
                                             }
                                         });
                             })
@@ -99,6 +100,7 @@ public class RahabLiaisonSourceWorkerAsWormhole implements RahabLiaisonSourceWor
                             this.close();
                         } else {
                             logger.info("RahabLiaisonSourceWorkerAsWormhole 自 情报源 往 虫洞 搬运数据 " + buffer.length() + "字节");
+                            logger.debug(buffer.toString());
                         }
                     });
         }

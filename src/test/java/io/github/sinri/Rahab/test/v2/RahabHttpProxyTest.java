@@ -2,6 +2,7 @@ package io.github.sinri.Rahab.test.v2;
 
 import io.github.sinri.Rahab.v2.RahabHttpProxy;
 import io.github.sinri.keel.Keel;
+import io.vertx.core.Future;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 
@@ -33,6 +34,14 @@ public class RahabHttpProxyTest {
 
         //rawImpl();
 
-        new RahabHttpProxy().listen(33333);
+        int portOfRahabHttpProxy = 33333;
+        new RahabHttpProxy().listen(portOfRahabHttpProxy)
+                .compose(server -> {
+                    System.out.println("OK RahabHttpProxy listen on " + portOfRahabHttpProxy);
+                    return Future.succeededFuture();
+                })
+                .onFailure(throwable -> {
+                    System.err.println(throwable.getMessage());
+                });
     }
 }
