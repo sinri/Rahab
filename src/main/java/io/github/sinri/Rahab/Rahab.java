@@ -23,6 +23,7 @@ import io.vertx.core.dns.AddressResolverOptions;
 import java.util.*;
 
 public class Rahab {
+    public final static String VERSION = "2.1.1";
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
 
@@ -50,8 +51,8 @@ public class Rahab {
 
         KeelLogger mainLogger = Keel.outputLogger("RahabMain");
 
-        CLI mainCLI = CLI.create("Rahab-2.1.jar")
-                .setSummary("Rahab 2.1 启动命令")
+        CLI mainCLI = CLI.create("Rahab-" + VERSION + ".jar")
+                .setSummary("Rahab " + VERSION + " 启动命令")
                 .addOption(new Option()
                         .setLongName("help")
                         .setShortName("h")
@@ -61,7 +62,7 @@ public class Rahab {
                 )
                 .addOption(new Option()
                         .setLongName("mode")
-                        .setChoices(Set.of("HttpProxy", "Wormhole", "RahabLiaisonBroker", "RahabLiaisonSource"))
+                        .setChoices(Set.of("HttpProxy", "Wormhole", "LiaisonBroker", "LiaisonSource"))
                         .setRequired(true)
                         .setDescription("运行模式")
                 )
@@ -111,7 +112,7 @@ public class Rahab {
                 )
                 .addOption(new TypedOption<Integer>()
                         .setType(Integer.class)
-                        .setLongName("LiaisonSourceWorkerWormholeport")
+                        .setLongName("LiaisonSourceWorkerWormholePort")
                         .setDefaultValue(String.valueOf(7999))
                         .setDescription("情报源使用的掮客服务的远程端口")
                 )
@@ -131,7 +132,7 @@ public class Rahab {
         List<String> userCommandLineArguments = new ArrayList<>(Arrays.asList(args));
         CommandLine commandLine = mainCLI.parse(userCommandLineArguments, false);
 
-        if (commandLine.isValid()) {
+        if (commandLine.isValid() && !commandLine.isAskingForHelp()) {
             String mode = commandLine.getOptionValue("mode");
             Integer port = commandLine.getOptionValue("port");
 
@@ -150,11 +151,11 @@ public class Rahab {
 
                     runAsWormhole(wormholeName, port, destinationHost, destinationPort, wormholeTransformerCode, fakeHost);
                     return;
-                case "RahabLiaisonBroker":
+                case "LiaisonBroker":
                     // as RahabLiaisonBroker
                     runAsLiaisonBroker(port);
                     return;
-                case "RahabLiaisonSource":
+                case "LiaisonSource":
                     // as RahabLiaisonSource
                     String sourceWorker = commandLine.getOptionValue("LiaisonSourceWorker");
                     SourceWorkerGenerator sourceWorkerGenerator = null;
@@ -180,6 +181,22 @@ public class Rahab {
         StringBuilder builder = new StringBuilder();
         mainCLI.usage(builder, "java -jar");
         mainLogger.print(builder.toString());
+
+        mainLogger.print("===== SAMPLE =====");
+        mainLogger.print("# Run as HTTP Proxy, listen on port 1080");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode HttpProxy --port 1080");
+        mainLogger.print("# Run as Wormhole, listen on port 1081, destination is 127.0.0.1:1080, data without transform");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode Wormhole --port [1081] --WormholeName [SAMPLE] --WormholeDestinationHost [127.0.0.1] --WormholeDestinationPort [1080]");
+        mainLogger.print("# Run as Wormhole, listen on port 1081, destination is 127.0.0.1:1080, use transformer HttpServer");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode Wormhole --port [1081] --WormholeName [SAMPLE] --WormholeDestinationHost [127.0.0.1] --WormholeDestinationPort [1080] --WormholeTransformer HttpServer");
+        mainLogger.print("# Run as Wormhole, listen on port 1081, destination is 127.0.0.1:1080, use transformer HttpClient with fake host api.com");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode Wormhole --port [1081] --WormholeName [SAMPLE] --WormholeDestinationHost [127.0.0.1] --WormholeDestinationPort [1080] --WormholeTransformer HttpClient --WormholeTransformerHttpFakeHost api.com");
+        mainLogger.print("# Run as LiaisonBroker, listen on port 1082");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode LiaisonBroker --port 1082");
+        mainLogger.print("# Run as LiaisonSource, target broker is 127.0.0.1:1082, with worker as Wormhole (destination is 192.168.0.1:1080)");
+        mainLogger.print("java -jar Rahab-" + VERSION + ".jar --mode LiaisonSource --LiaisonBrokerHost 127.0.0.1 --LiaisonBrokerPort 1082 --LiaisonSourceWorker wormhole --LiaisonSourceWorkerWormholeHost 192.168.0.1 --LiaisonSourceWorkerWormholePort 1080");
+
+
         System.exit(1);
     }
 
