@@ -1,6 +1,6 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.RahabHttpProxy;
+import io.github.sinri.Rahab.v2.proxy.http.RahabHttpProxy;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.Future;
 import io.vertx.core.VertxOptions;
