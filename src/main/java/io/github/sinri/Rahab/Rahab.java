@@ -120,7 +120,7 @@ public class Rahab {
             }
 
             executor.run();
-            System.exit(0);
+            return;
         }
 
         StringBuilder builder = new StringBuilder();

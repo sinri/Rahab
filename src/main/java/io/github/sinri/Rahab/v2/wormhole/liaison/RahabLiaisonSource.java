@@ -73,7 +73,12 @@ public class RahabLiaisonSource {
                                 logger.exception("RahabLiaisonSource 与掮客的通讯 出错", throwable);
                             })
                             .closeHandler(v -> {
-                                logger.notice("RahabLiaisonSource 与掮客的通讯 关闭；掮客客户端 即将关闭。");
+                                logger.notice("RahabLiaisonSource 与掮客的通讯关闭；掮客客户端即将关闭。");
+
+                                Keel.getVertx().setTimer(1000L, timerID -> {
+                                    logger.notice("RahabLiaisonSource 准备重启与掮客的通讯");
+                                    this.start(brokerHost, brokerPort);
+                                });
                             })
                     ;
 
@@ -89,12 +94,13 @@ public class RahabLiaisonSource {
                                         int currentFailedCount = pingFailedCounter.incrementAndGet();
                                         logger.exception("Source Ping Sending Failed * " + currentFailedCount, voidAsyncResult.cause());
 
-                                        if (currentFailedCount >= 5) {
-                                            Keel.getVertx().cancelTimer(timerID);
-                                            logger.fatal("Source Ping 连续5次暴毙！撤销PING的定时器并准备重启。");
-
-                                            this.start(brokerHost, brokerPort);
-                                        }
+//                                        if (currentFailedCount >= 5) {
+//                                            Keel.getVertx().cancelTimer(timerID);
+//                                            logger.fatal("Source Ping 连续5次暴毙！撤销PING的定时器并关闭通信。");
+//
+//                                            //this.start(brokerHost, brokerPort);
+//                                            socketWithBroker.close();
+//                                        }
                                     } else {
                                         logger.debug("Source Ping Sent");
                                         pingFailedCounter.set(0);

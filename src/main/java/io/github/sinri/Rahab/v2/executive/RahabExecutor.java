@@ -68,7 +68,7 @@ abstract public class RahabExecutor {
         CommandLine commandLine = getCommandLineParseRule().parse(userCommandLineArguments, false);
         if (commandLine.isValid() && !commandLine.isAskingForHelp()) {
             execute(commandLine);
-            System.exit(0);
+            return;
         }
 
         showHelp();
