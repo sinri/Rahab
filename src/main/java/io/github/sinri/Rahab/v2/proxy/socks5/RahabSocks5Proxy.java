@@ -63,7 +63,10 @@ public class RahabSocks5Proxy {
                                         socketLogger.print(KeelLogLevel.DEBUG, KeelHelper.bufferToHexMatrix(bufferFromClient, 20));
 
                                         // 1. from client VER*1 NumberOfMETHODS*1 METHODS*NumberOfMETHODS
-                                        bufferFromClient.getByte(0); // 5, ignored
+                                        byte step_1_ver = bufferFromClient.getByte(0); // 5, ignored
+                                        if (step_1_ver != 0x05) {
+                                            throw new IllegalArgumentException("STEP 1: VERSION IS NOT 5");
+                                        }
                                         byte numberOfMethods = bufferFromClient.getByte(1);
                                         List<Byte> methodsSupportedByBoth = new ArrayList<>();
                                         for (var i = 0; i < numberOfMethods; i++) {
@@ -219,6 +222,9 @@ public class RahabSocks5Proxy {
                                                             socketToActualServer
                                                                     .handler(bufferFromActualServer -> {
                                                                         socketLogger.info("自 目标服务 发给 代理客户端 的数据包 共 " + bufferFromActualServer.length() + " 字节");
+                                                                        socketLogger.print(KeelLogLevel.DEBUG, KeelHelper.bufferToHexMatrix(bufferFromActualServer, 20));
+                                                                        socketLogger.print(KeelLogLevel.DEBUG, bufferFromActualServer.toString());
+
                                                                         socketFromClient.write(bufferFromActualServer)
                                                                                 .onComplete(voidAsyncResult -> {
                                                                                     if (voidAsyncResult.failed()) {
@@ -229,6 +235,9 @@ public class RahabSocks5Proxy {
                                                                                         socketLogger.info("转发 来自 目标服务 的数据包给 客户端 成功");
                                                                                     }
                                                                                 });
+                                                                    })
+                                                                    .endHandler(v -> {
+                                                                        socketLogger.notice("与 目标服务 的通讯 结束");
                                                                     })
                                                                     .exceptionHandler(throwable -> {
                                                                         socketLogger.exception("目标服务 与 代理客户端 的通讯出错", throwable);
@@ -245,11 +254,12 @@ public class RahabSocks5Proxy {
                                                             // send 0x00 succeeded
                                                             protocolStepEnum.set(ProtocolStepEnum.STEP_4_TRANSFER);
                                                             //todo debug
+                                                            byte x0 = 0x01;
                                                             byte[] x1 = new byte[]{0, 0, 0, 0};
                                                             short x2 = 0;
 
-                                                            // rawDestinationAddress rawDestinationPort
-                                                            this.respondInStep3((byte) 0x00, addressType, x1, x2, socketFromClient, socketLogger);
+                                                            // addressType rawDestinationAddress rawDestinationPort
+                                                            this.respondInStep3((byte) 0x00, x0, x1, x2, socketFromClient, socketLogger);
                                                             return Future.succeededFuture();
                                                         });
                                             } else if (cmd == 0x02) {
@@ -304,6 +314,10 @@ public class RahabSocks5Proxy {
                                         break;
                                     case STEP_4_TRANSFER:
                                         NetSocket socketToActualServer = atomicSocketToActualServer.get();
+
+                                        socketLogger.print(KeelLogLevel.DEBUG, KeelHelper.bufferToHexMatrix(bufferFromClient, 20));
+                                        socketLogger.print(KeelLogLevel.DEBUG, bufferFromClient.toString());
+
                                         socketToActualServer.write(bufferFromClient)
                                                 .onComplete(voidAsyncResult -> {
                                                     if (voidAsyncResult.failed()) {
@@ -317,11 +331,14 @@ public class RahabSocks5Proxy {
                                         break;
                                 }
                             })
+                            .endHandler(v -> {
+                                socketLogger.notice("与客户端的通讯 结束");
+                            })
                             .exceptionHandler(throwable -> {
-                                socketLogger.exception("Socks5 Server Client Socket Error", throwable);
+                                socketLogger.exception("与客户端的通讯 出错", throwable);
                             })
                             .closeHandler(v -> {
-                                socketLogger.notice("Socks5 Server Client Socket Closed");
+                                socketLogger.notice("与客户端的通讯 关闭");
                             });
                 })
                 .exceptionHandler(throwable -> {

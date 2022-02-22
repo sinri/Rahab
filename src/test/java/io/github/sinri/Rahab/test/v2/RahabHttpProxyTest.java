@@ -21,8 +21,9 @@ public class RahabHttpProxyTest {
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
         Keel.initializeVertx(
-                new VertxOptions().
-                        setAddressResolverOptions(
+                new VertxOptions()
+                        .setWorkerPoolSize(32)
+                        .setAddressResolverOptions(
                                 new AddressResolverOptions()
                                         .addServer("119.29.29.29")
                                         .addServer("223.5.5.5")
