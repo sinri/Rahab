@@ -17,7 +17,7 @@ public interface RahabLiaisonSourceWorker {
 
     Future<Void> initialize();
 
-    void handle(Buffer buffer);
+    void handle(Buffer rawBufferFromClient);
 
     Future<Void> close();
 

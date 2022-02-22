@@ -107,8 +107,8 @@ public class RahabLiaisonSourceWorkerAsWormhole implements RahabLiaisonSourceWor
     }
 
     @Override
-    public void handle(Buffer buffer) {
-        this.bufferQueue.offer(buffer);
+    public void handle(Buffer rawBufferFromClient) {
+        this.bufferQueue.offer(rawBufferFromClient);
 
         if (this.wormholeSocket == null) {
             logger.debug("wormholeSocket still null, start wait");

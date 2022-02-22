@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,12 +50,15 @@ public class RahabLiaisonBroker {
     }
 
     public Future<NetServer> listen(int port) {
+        KeelLogger sourceRegistrationLogger = Keel.standaloneLogger("ProxyBrokerSourceRegistration");
+
         return this.brokerServer
                 .connectHandler(socket -> {
                     String socketID = UUID.randomUUID().toString().replace("-", "");
                     KeelLogger socketLogger = Keel.standaloneLogger("ProxyBrokerSocket").setCategoryPrefix(socketID);
 
                     AtomicReference<SOCKET_ROLE> atomicSocketRole = new AtomicReference<>(SOCKET_ROLE.INIT);
+                    AtomicInteger pongFailedCounter = new AtomicInteger(0);
 
                     socket
                             .handler(buffer -> {
@@ -65,9 +69,11 @@ public class RahabLiaisonBroker {
                                         String proxyName = matcherForProxyRegister.group(1);
                                         if (this.proxySocket != null) {
                                             socketLogger.warning("代理卧底 已经存在 先关闭之");
+                                            sourceRegistrationLogger.warning("即将关闭当前的 代理卧底 通信, 登记名称为 " + proxyName);
                                             this.proxySocket.close();
                                         }
                                         socketLogger.notice("登记新的代理卧底 " + proxyName + " 于 " + socket.remoteAddress().toString());
+                                        sourceRegistrationLogger.notice("登记新的代理卧底, 登记名称为 " + proxyName + " 潜伏地址为 " + socket.remoteAddress().toString() + " socket id 为 " + socketID);
                                         this.proxySocket = socket;
                                         atomicSocketRole.set(SOCKET_ROLE.PROXY);
                                         // then wait for next buffer
@@ -111,6 +117,33 @@ public class RahabLiaisonBroker {
                                     for (var item : list) {
                                         String clientID = item.getClientID();
                                         Buffer rawBufferFromProxyToClient = item.getRawBuffer();
+
+                                        if (clientID.equals("SourcePing")) {
+                                            socketLogger.debug("收到 代理卧底 发来的 生存确认");
+                                            sourceRegistrationLogger.debug("Source Ping: " + rawBufferFromProxyToClient.toString());
+
+                                            Buffer pongBufferToSource = NamedDataProcessor.makeNamedDataBuffer(
+                                                    Buffer.buffer("ROGER, BROKER IS WELL, TOO."),
+                                                    "BrokerPong"
+                                            );
+                                            socket.write(pongBufferToSource)
+                                                    .onComplete(voidAsyncResult -> {
+                                                        if (voidAsyncResult.failed()) {
+                                                            int currentFailedCount = pongFailedCounter.incrementAndGet();
+                                                            socketLogger.exception("Broker Pong Sending Failed * " + currentFailedCount, voidAsyncResult.cause());
+
+                                                            if (currentFailedCount >= 5) {
+                                                                socketLogger.fatal("Broker Pong 连续5次暴毙！撤销PING的定时器并准备重启。");
+                                                                sourceRegistrationLogger.fatal("代理卧底 发来的PING已经5次没法PONG回去了");
+                                                            }
+                                                        } else {
+                                                            socketLogger.debug("Broker Pong Sent");
+                                                            pongFailedCounter.set(0);
+                                                        }
+                                                    });
+                                            continue;
+                                        }
+
                                         NetSocket socketToTargetClient = this.clientSocketMap.get(clientID);
                                         if (socketToTargetClient == null) {
                                             socketLogger.warning("代理卧底 发来给 客户端 [" + clientID + "] 的数据 " + rawBufferFromProxyToClient.length() + " 字节 因 客户端不存在，丢弃");
@@ -133,16 +166,23 @@ public class RahabLiaisonBroker {
                             .exceptionHandler(throwable -> {
                                 socketLogger.exception("通讯出错", throwable);
                                 if (atomicSocketRole.get() == SOCKET_ROLE.INIT) {
-                                    socketLogger.error("关闭这个 INIT 通讯");
+                                    socketLogger.error("即将关闭 这个 INIT 通讯");
                                     socket.close();
                                 } else if (atomicSocketRole.get() == SOCKET_ROLE.CLIENT) {
-                                    socketLogger.error("关闭这个 CLIENT 通讯");
+                                    socketLogger.error("即将关闭 这个 CLIENT 通讯");
                                     this.clientSocketMap.remove(socketID);
                                     socket.close();
                                 } else if (atomicSocketRole.get() == SOCKET_ROLE.PROXY) {
-                                    socketLogger.error("关闭这个 PROXY 通讯");
+                                    socketLogger.error("即将关闭 这个 PROXY 通讯");
                                     this.proxySocket = null;
                                     socket.close();
+                                }
+                            })
+                            .closeHandler(v -> {
+                                socketLogger.notice("关闭 " + atomicSocketRole.get() + " 通信");
+                                if (atomicSocketRole.get() == SOCKET_ROLE.PROXY) {
+                                    sourceRegistrationLogger.warning("当前 代理通信 关闭");
+                                    this.proxySocket = null;
                                 }
                             });
                 })

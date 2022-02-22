@@ -1,5 +1,6 @@
 package io.github.sinri.Rahab;
 
+import io.github.sinri.Rahab.v2.executive.*;
 import io.github.sinri.Rahab.v2.proxy.http.RahabHttpProxy;
 import io.github.sinri.Rahab.v2.wormhole.Wormhole;
 import io.github.sinri.Rahab.v2.wormhole.liaison.RahabLiaisonBroker;
@@ -23,8 +24,9 @@ import io.vertx.core.dns.AddressResolverOptions;
 import java.util.*;
 
 public class Rahab {
-    public final static String VERSION = "2.1.1";
-    public static void main(String[] args) {
+    public final static String VERSION = "2.2.0";
+
+    private static void initializeVertx() {
         Keel.loadPropertiesFromFile("config.properties");
 
         VertxOptions vertxOptions = new VertxOptions();
@@ -48,7 +50,86 @@ public class Rahab {
         vertxOptions.setAddressResolverOptions(addressResolverOptions);
 
         Keel.initializeVertx(vertxOptions);
+    }
 
+    public static void main(String[] args) {
+        initializeVertx();
+
+        List<String> userCommandLineArguments = new ArrayList<>(Arrays.asList(args));
+
+        //commandParserV21(userCommandLineArguments);
+
+        CLI mainCLI = CLI.create("Rahab-" + VERSION + ".jar")
+                .setSummary("Rahab " + VERSION + " 启动命令")
+                .addOption(new Option()
+                        .setLongName("help")
+                        .setShortName("h")
+                        .setDescription("获取命令帮助")
+                        .setFlag(true)
+                        .setHelp(true)
+                )
+                .addOption(new Option()
+                        .setLongName("mode")
+                        .setChoices(Set.of(
+                                RahabExecutor.MODE_HTTP_PROXY,
+                                RahabExecutor.MODE_WORMHOLE,
+                                RahabExecutor.MODE_SOCKS5_PROXY,
+                                RahabExecutor.MODE_LIAISON_SOURCE,
+                                RahabExecutor.MODE_LIAISON_BROKER
+                        ))
+                        .setRequired(true)
+                        .setDescription("运行模式")
+                );
+        CommandLine commandLine = mainCLI.parse(userCommandLineArguments, false);
+
+        if (commandLine.isValid()) {
+            String mode = commandLine.getOptionValue("mode");
+
+            RahabExecutor executor;
+            switch (mode) {
+                case RahabExecutor.MODE_HTTP_PROXY:
+                    executor = new HTTPProxyExecutor(userCommandLineArguments);
+                    break;
+                case RahabExecutor.MODE_SOCKS5_PROXY:
+                    executor = new Socks5ProxyExecutor(userCommandLineArguments);
+                    break;
+                case RahabExecutor.MODE_WORMHOLE:
+                    executor = new WormholeExecutor(userCommandLineArguments);
+                    break;
+                case RahabExecutor.MODE_LIAISON_BROKER:
+                    executor = new LiaisonBrokerExecutor(userCommandLineArguments);
+                    break;
+                case RahabExecutor.MODE_LIAISON_SOURCE:
+                    executor = new LiaisonSourceExecutor(userCommandLineArguments);
+                    break;
+                default:
+                    executor = new RahabExecutor(userCommandLineArguments) {
+                        @Override
+                        protected CLI getCommandLineParseRule() {
+                            return getSharedCommandParseRule();
+                        }
+
+                        @Override
+                        protected void execute(CommandLine commandLine) {
+                            StringBuilder builder = new StringBuilder();
+                            getCommandLineParseRule().usage(builder, "java -jar");
+                            System.out.println(builder);
+                            System.exit(1);
+                        }
+                    };
+            }
+
+            executor.run();
+            System.exit(0);
+        }
+
+        StringBuilder builder = new StringBuilder();
+        mainCLI.usage(builder, "java -jar");
+        System.out.println(builder);
+        System.exit(1);
+    }
+
+    private static void commandParserV21(List<String> userCommandLineArguments) {
         KeelLogger mainLogger = Keel.outputLogger("RahabMain");
 
         CLI mainCLI = CLI.create("Rahab-" + VERSION + ".jar")
@@ -129,7 +210,6 @@ public class Rahab {
                 );
 
 
-        List<String> userCommandLineArguments = new ArrayList<>(Arrays.asList(args));
         CommandLine commandLine = mainCLI.parse(userCommandLineArguments, false);
 
         if (commandLine.isValid() && !commandLine.isAskingForHelp()) {
