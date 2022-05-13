@@ -21,6 +21,7 @@ import java.util.function.Function;
  * 虫洞：TCP转发
  * 源 ←[近端通讯]→ 近端服务器 ↔ 远端客户端 ←[远端通讯]→ 目标
  */
+@Deprecated
 public class Wormhole {
     /**
      * 近端服务器

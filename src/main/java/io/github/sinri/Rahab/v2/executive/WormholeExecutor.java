@@ -1,11 +1,10 @@
 package io.github.sinri.Rahab.v2.executive;
 
-import io.github.sinri.Rahab.v2.wormhole.Wormhole;
+import io.github.sinri.Rahab.v2.wormhole.WormholeVerticle;
 import io.github.sinri.Rahab.v2.wormhole.transform.impl.http.client.TransformerFromHttpRequestToRaw;
 import io.github.sinri.Rahab.v2.wormhole.transform.impl.http.client.TransformerFromRawToHttpRequest;
 import io.github.sinri.Rahab.v2.wormhole.transform.impl.http.server.TransformerFromHttpResponseToRaw;
 import io.github.sinri.Rahab.v2.wormhole.transform.impl.http.server.TransformerFromRawToHttpResponse;
-import io.github.sinri.keel.Keel;
 import io.vertx.core.cli.CLI;
 import io.vertx.core.cli.CommandLine;
 import io.vertx.core.cli.Option;
@@ -68,25 +67,17 @@ public class WormholeExecutor extends RahabExecutor {
 
         String wormholeTransformerCode = commandLine.getOptionValue("transformer");
 
-        Wormhole wormhole = new Wormhole(wormholeName, destinationHost, destinationPort);
+        WormholeVerticle wormholeVerticle = new WormholeVerticle(wormholeName, port, destinationHost, destinationPort);
         if (wormholeTransformerCode.equals("HttpServer")) {
-            wormhole
+            wormholeVerticle
                     .setTransformerForDataFromRemote(new TransformerFromRawToHttpResponse())
                     .setTransformerForDataFromLocal(new TransformerFromHttpRequestToRaw());
         } else if (wormholeTransformerCode.equals("HttpClient")) {
             String fakeHost = commandLine.getOptionValue("transformerHttpFakeHost");
-            wormhole
+            wormholeVerticle
                     .setTransformerForDataFromRemote(new TransformerFromHttpResponseToRaw())
                     .setTransformerForDataFromLocal(new TransformerFromRawToHttpRequest(fakeHost));
         }
-
-        wormhole.listen(port)
-                .onSuccess(server -> {
-                    getLogger().notice("WormholeProxy [" + wormholeName + "] 端口 " + port + " 开始运作，终点 " + destinationHost + ":" + destinationPort);
-                })
-                .onFailure(throwable -> {
-                    getLogger().exception("WormholeProxy [" + wormholeName + "] 端口 " + port + " 启动失败", throwable);
-                    Keel.getVertx().close();
-                });
+        wormholeVerticle.deployMe();
     }
 }

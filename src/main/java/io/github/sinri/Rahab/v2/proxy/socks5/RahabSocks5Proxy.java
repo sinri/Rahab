@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc1928">SOCKS Protocol Version 5</a>
  */
+@Deprecated
 public class RahabSocks5Proxy {
     /**
      * SOCKS5 代理服务器

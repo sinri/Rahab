@@ -1,7 +1,6 @@
 package io.github.sinri.Rahab.v2.executive;
 
-import io.github.sinri.Rahab.v2.proxy.http.RahabHttpProxy;
-import io.github.sinri.keel.Keel;
+import io.github.sinri.Rahab.v2.proxy.http.RahabHttpProxyVerticle;
 import io.vertx.core.cli.CLI;
 import io.vertx.core.cli.CommandLine;
 import io.vertx.core.cli.TypedOption;
@@ -28,13 +27,7 @@ public class HTTPProxyExecutor extends RahabExecutor {
     @Override
     protected void execute(CommandLine commandLine) {
         int port = commandLine.getOptionValue("port");
-        new RahabHttpProxy().listen(port)
-                .onSuccess(server -> {
-                    getLogger().notice("RahabHttpProxy 开始运作 端口为 " + port);
-                })
-                .onFailure(throwable -> {
-                    getLogger().exception("RahabHttpProxy 启动失败 端口为 " + port, throwable);
-                    Keel.getVertx().close();
-                });
+
+        new RahabHttpProxyVerticle(port).deployMe();
     }
 }

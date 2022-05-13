@@ -3,63 +3,45 @@ package io.github.sinri.Rahab.v2.proxy.http;
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.logger.KeelLogLevel;
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.vertx.core.Future;
+import io.github.sinri.keel.verticles.KeelVerticle;
 import io.vertx.core.net.NetClient;
-import io.vertx.core.net.NetServer;
 import io.vertx.core.net.NetSocket;
 
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * HTTP Proxy
- * {浏览器} ←[代理通讯]→ {代理服务器 ↔ 中介客户端} ←[自由通讯]→ {目标服务器}
+ * @since 3.0.0
  */
-@Deprecated
-public class RahabHttpProxy {
+class RahabHttpProxyWorkerVerticle extends KeelVerticle {
+    private final String requestID;
     /**
-     * 代理服务器
+     * 代理通讯
      */
-    private final NetServer proxyServer;
+    private final NetSocket proxySocket;
     private final NetClient freedomClient;
 
-    protected KeelLogger proxyLogger = Keel.logger("RahabHttpProxy");
     private static final Pattern patternForConnectRequest = Pattern.compile("CONNECT (.+):(\\d+) HTTP/1.1");
 
-    public RahabHttpProxy() {
-        this.proxyServer = Keel.getVertx().createNetServer()
-                .connectHandler(this::proxyServerConnectHandler)
-                .exceptionHandler(throwable -> {
-                    proxyLogger.exception("代理服务器 出现故障", throwable);
-                });
+
+    public RahabHttpProxyWorkerVerticle(NetSocket proxySocket, String requestID) {
+        this.proxySocket = proxySocket;
+        this.requestID = requestID;
         this.freedomClient = Keel.getVertx().createNetClient();
-//        this.transformerForDataFromLocal = null;
-//        this.transformerForDataFromRemote = null;
     }
 
-//    public RahabHttpProxy setTransformerForDataFromRemote(WormholeTransformer transformerForDataFromRemote) {
-//        this.transformerForDataFromRemote = transformerForDataFromRemote;
-//        return this;
-//    }
-//
-//    public RahabHttpProxy setTransformerForDataFromLocal(WormholeTransformer transformerForDataFromLocal) {
-//        this.transformerForDataFromLocal = transformerForDataFromLocal;
-//        return this;
-//    }
-
-    public Future<NetServer> listen(int proxyPort) {
-        return this.proxyServer.listen(proxyPort);
-    }
-
-    /**
-     * @param proxySocket 代理通讯
-     */
-    private void proxyServerConnectHandler(NetSocket proxySocket) {
-        String requestID = UUID.randomUUID().toString().replace("-", "");
+    @Override
+    public void start() throws Exception {
         KeelLogger workerLogger = Keel.standaloneLogger("HttpProxyWorker").setCategoryPrefix(requestID);
+        setLogger(workerLogger);
+
+        proxyServerConnectHandler();
+    }
+
+    private void proxyServerConnectHandler() {
+        KeelLogger workerLogger = getLogger();
 
         workerLogger.notice("建立了一个新的 代理通讯 服务浏览器 " + proxySocket.remoteAddress().toString());
 
@@ -138,6 +120,10 @@ public class RahabHttpProxy {
                         });
                     }
                 })
+                .endHandler(v -> {
+                    workerLogger.info("代理通讯 结束，即将关闭");
+                    proxySocket.close();
+                })
                 .exceptionHandler(throwable -> {
                     workerLogger.exception("代理通讯 报错，即将关闭", throwable);
                     proxySocket.close();
@@ -146,9 +132,11 @@ public class RahabHttpProxy {
                     workerLogger.notice("代理通讯 关闭");
                     if (atomicFreedomSocket.get() != null) {
                         workerLogger.info("自由通讯 即将关闭");
-                        atomicFreedomSocket.get().close();
+                        atomicFreedomSocket.get().close()
+                                .compose(freedomSocketClosed -> undeployMe());
+                    } else {
+                        undeployMe();
                     }
                 });
     }
-
 }

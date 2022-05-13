@@ -1,10 +1,9 @@
 package io.github.sinri.Rahab.v2.executive;
 
-import io.github.sinri.Rahab.v2.wormhole.liaison.RahabLiaisonSource;
+import io.github.sinri.Rahab.v2.wormhole.liaison.RahabLiaisonSourceVerticle;
 import io.github.sinri.Rahab.v2.wormhole.liaison.RahabLiaisonSourceWorker;
 import io.github.sinri.Rahab.v2.wormhole.liaison.SourceWorkerGenerator;
 import io.github.sinri.Rahab.v2.wormhole.liaison.impl.RahabLiaisonSourceWorkerAsWormhole;
-import io.github.sinri.keel.Keel;
 import io.vertx.core.cli.CLI;
 import io.vertx.core.cli.CommandLine;
 import io.vertx.core.cli.Option;
@@ -78,16 +77,8 @@ public class LiaisonSourceExecutor extends RahabExecutor {
         String liaisonBrokerHost = commandLine.getOptionValue("brokerHost");
         int liaisonBrokerPort = commandLine.getOptionValue("brokerPort");
 
-        RahabLiaisonSource rahabLiaisonSource = new RahabLiaisonSource(sourceName);
-        rahabLiaisonSource.setSourceWorkerGenerator(sourceWorkerGenerator);
-        rahabLiaisonSource.start(liaisonBrokerHost, liaisonBrokerPort)
-                .onComplete(netServerAsyncResult -> {
-                    if (netServerAsyncResult.failed()) {
-                        getLogger().exception("RahabLiaisonSource 启动失败", netServerAsyncResult.cause());
-                        Keel.getVertx().close();
-                    } else {
-                        getLogger().notice("RahabLiaisonSource 启动成功 掮客 地址 " + liaisonBrokerHost + "端口 " + liaisonBrokerPort);
-                    }
-                });
+        new RahabLiaisonSourceVerticle(sourceName, liaisonBrokerHost, liaisonBrokerPort)
+                .setSourceWorkerGenerator(sourceWorkerGenerator)
+                .deployMe();
     }
 }

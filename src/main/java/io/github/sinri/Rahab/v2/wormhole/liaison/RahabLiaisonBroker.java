@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
  * 1. 情报源: RahabLiaisonSource
  * 2. 情报客户: 任意一个TCP客户端即可
  */
+@Deprecated
 public class RahabLiaisonBroker {
     /**
      * 掮客服务器
