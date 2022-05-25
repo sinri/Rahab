@@ -1,6 +1,5 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.wormhole.Wormhole;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
@@ -9,7 +8,6 @@ public class WormholeProxyRawTest {
     /**
      * listen on 22222 -> 33333
      *
-     * @param args
      */
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");

@@ -1,6 +1,6 @@
 package io.github.sinri.Rahab.test.v3;
 
-import io.github.sinri.Rahab.v2.proxy.http.RahabHttpProxyVerticle;
+import io.github.sinri.Rahab.v3.proxy.http.RahabHttpProxyVerticle;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
@@ -16,7 +16,6 @@ public class HttpProxyTest {
     /**
      * listen on 33333
      *
-     * @param args
      */
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
@@ -40,13 +39,5 @@ public class HttpProxyTest {
         RahabHttpProxyVerticle rahabHttpProxyVerticle = new RahabHttpProxyVerticle(portOfRahabHttpProxy);
         rahabHttpProxyVerticle.deployMe();
 
-//        new RahabHttpProxy().listen(portOfRahabHttpProxy)
-//                .compose(server -> {
-//                    System.out.println("OK RahabHttpProxy listen on " + portOfRahabHttpProxy);
-//                    return Future.succeededFuture();
-//                })
-//                .onFailure(throwable -> {
-//                    System.err.println(throwable.getMessage());
-//                });
     }
 }

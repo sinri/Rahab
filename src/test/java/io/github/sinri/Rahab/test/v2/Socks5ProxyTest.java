@@ -1,9 +1,8 @@
 package io.github.sinri.Rahab.test.v2;
 
-import io.github.sinri.Rahab.v2.proxy.socks5.RahabSocks5Proxy;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.RahabSocks5AuthMethod;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.RahabSocks5AuthMethod;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.Future;
 import io.vertx.core.VertxOptions;

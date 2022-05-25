@@ -1,9 +1,9 @@
 package io.github.sinri.Rahab.test.v3;
 
-import io.github.sinri.Rahab.v2.proxy.socks5.RahabSocks5ProxyVerticle;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.RahabSocks5AuthMethod;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
-import io.github.sinri.Rahab.v2.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
+import io.github.sinri.Rahab.v3.proxy.socks5.RahabSocks5ProxyVerticle;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.RahabSocks5AuthMethod;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
+import io.github.sinri.Rahab.v3.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
 import io.github.sinri.keel.Keel;
 import io.vertx.core.Future;
 import io.vertx.core.VertxOptions;
@@ -45,13 +45,5 @@ public class Socks5ProxyTest {
         RahabSocks5ProxyVerticle rahabSocks5ProxyVerticle = new RahabSocks5ProxyVerticle(7090, authMethodSet);
         rahabSocks5ProxyVerticle.deployMe();
 
-//        new RahabSocks5Proxy(authMethodSet)
-//                .listen(7090)
-//                .onFailure(throwable -> {
-//                    Keel.outputLogger("Socks5ProxyTest").exception("LISTEN FAILED", throwable);
-//                })
-//                .onSuccess(x -> {
-//                    Keel.outputLogger("Socks5ProxyTest").notice("LISTEN STARTED on 7090");
-//                });
     }
 }
