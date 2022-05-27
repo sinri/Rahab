@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 public class Rahab {
-    public final static String VERSION = "3.0.1";
+    public final static String VERSION = "3.0.2";
 
     private static void initializeVertx() {
         Keel.loadPropertiesFromFile("config.properties");

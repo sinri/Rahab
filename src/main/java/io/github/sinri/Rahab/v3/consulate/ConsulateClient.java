@@ -21,12 +21,15 @@ public class ConsulateClient extends KeelVerticle {
 //        this.serverWebSocketURI = serverWebSocketURI;
 
         serverAsSocks5Proxy = Keel.getVertx().createNetServer();
-        websocketClient = Keel.getVertx().createHttpClient(
-                new HttpClientOptions()
-                        .setDefaultHost(wsHost)
-                        .setDefaultPort(wsPort)
-                        .setIdleTimeout(10).setIdleTimeoutUnit(TimeUnit.SECONDS)
-        );
+
+        HttpClientOptions httpClientOptions = new HttpClientOptions()
+                .setDefaultHost(wsHost)
+                .setDefaultPort(wsPort)
+                .setIdleTimeout(10).setIdleTimeoutUnit(TimeUnit.SECONDS);
+        if (wsPort == 443) {
+            httpClientOptions.setSsl(true);
+        }
+        websocketClient = Keel.getVertx().createHttpClient(httpClientOptions);
         this.wsPath = wsPath;
     }
 

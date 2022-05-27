@@ -39,8 +39,8 @@ public class ConsulateServerExecutor extends RahabExecutor {
                         .setLongName("socks5_port")
                         .setDescription("SOCKS5使用的端口")
                 )
-                .addOption(new TypedOption<Integer>()
-                        .setType(Integer.class)
+                .addOption(new TypedOption<String>()
+                        .setType(String.class)
                         .setRequired(false)
                         .setLongName("socks5_host")
                         .setDescription("SOCKS5使用的地址；如果不填，则内嵌")
@@ -51,7 +51,21 @@ public class ConsulateServerExecutor extends RahabExecutor {
                         .setLongName("idle_timeout_seconds")
                         .setDescription("空闲超时秒数")
                         .setDefaultValue("10")
-                );
+                )
+                .addOption(new TypedOption<String>()
+                        .setType(String.class)
+                        .setRequired(false)
+                        .setLongName("jks_path")
+                        .setDescription("SSL JKS PATH 不填的话就不使用SSL")
+                )
+                .addOption(new TypedOption<String>()
+                        .setType(String.class)
+                        .setRequired(false)
+                        .setLongName("jks_password")
+                        .setDescription("SSL JKS PASSWORD如果不填，则内嵌")
+                        .setDefaultValue("")
+                )
+                ;
     }
 
     @Override
@@ -61,14 +75,17 @@ public class ConsulateServerExecutor extends RahabExecutor {
         String socks5_host = commandLine.getOptionValue("socks5_host");
         String server_ws_path = commandLine.getOptionValue("server_ws_path");
         int idle_timeout_seconds = commandLine.getOptionValue("idle_timeout_seconds");
-
+        String jksPath = commandLine.getOptionValue("jks_path");
+        String jksPassword = commandLine.getOptionValue("jks_password");
         ensureSocks5(socks5_host, socks5_port, idle_timeout_seconds)
                 .compose(s -> {
                     return new ConsulateServer(
                             server_ws_path,
                             port,
                             socks5_port,
-                            (socks5_host == null ? "127.0.0.1" : socks5_host)
+                            (socks5_host == null ? "127.0.0.1" : socks5_host),
+                            jksPath,
+                            jksPassword
                     )
                             .deployMe();
                 });

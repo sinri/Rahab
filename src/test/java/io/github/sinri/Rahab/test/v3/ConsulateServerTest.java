@@ -7,7 +7,9 @@ import io.github.sinri.keel.Keel;
 public class ConsulateServerTest {
     public static void main(String[] args) {
         RahabTestKit.init();
-        new ConsulateServer("/consulate", 33333, 20000, "116.62.78.192")
+
+
+        new ConsulateServer("/consulate", 33333, 20000, "116.62.78.192", null, null)
                 .deployMe()
                 .onComplete(stringAsyncResult -> {
                     if (stringAsyncResult.failed()) {
@@ -16,5 +18,7 @@ public class ConsulateServerTest {
                         Keel.outputLogger("ConsulateServerTest").info("ConsulateServerTest START " + stringAsyncResult.result() + " listen on 33333 -> 116.62.78.192:20000");
                     }
                 });
+
+
     }
 }

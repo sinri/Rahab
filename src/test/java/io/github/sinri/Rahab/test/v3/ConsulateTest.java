@@ -15,7 +15,7 @@ import java.util.Set;
 
 public class ConsulateTest {
     private static final int socks5port = 10000;
-    private static final int consulateServerPort = 10001;
+    private static final int consulateServerPort = 443;
     private static final int consulateClientPort = 10002;
 
     public static void main(String[] args) {
@@ -25,9 +25,12 @@ public class ConsulateTest {
                         consulateServer(),
                         consulateClient()
                 )
-                .compose(compositeFuture -> {
-                    Keel.outputLogger("ConsulateTest").info("ALL DONE");
-                    return Future.succeededFuture();
+                .onComplete(compositeFutureAsyncResult -> {
+                    if (compositeFutureAsyncResult.failed()) {
+                        Keel.outputLogger("ConsulateTest").exception("ANY ERROR", compositeFutureAsyncResult.cause());
+                    } else {
+                        Keel.outputLogger("ConsulateTest").info("ALL DONE");
+                    }
                 });
     }
 
@@ -50,24 +53,33 @@ public class ConsulateTest {
     }
 
     private static Future<String> consulateServer() {
-        return new ConsulateServer("/consulate", consulateServerPort, socks5port, "127.0.0.1")
-                .deployMe()
-                .onComplete(stringAsyncResult -> {
-                    if (stringAsyncResult.failed()) {
-                        Keel.outputLogger("ConsulateTest").exception("ConsulateServer ERROR", stringAsyncResult.cause());
-                    } else {
-                        Keel.outputLogger("ConsulateTest").info("ConsulateServer START " + stringAsyncResult.result() + " listen on " + consulateServerPort + " -> 127.0.0.1:" + socks5port);
-                    }
+        String jksPath = "~/domain.jks";
+        String jksPasswordFile = "~/jks-password.txt";
+
+        return Keel.getVertx().fileSystem()
+                .readFile(jksPasswordFile)
+                .compose(buffer -> {
+                    return Future.succeededFuture(buffer.toString());
+                })
+                .compose(jksPassword -> {
+                    return new ConsulateServer("/consulate", consulateServerPort, socks5port, "127.0.0.1", jksPath, jksPassword)
+                            .deployMe()
+                            .onComplete(stringAsyncResult -> {
+                                if (stringAsyncResult.failed()) {
+                                    Keel.outputLogger("ConsulateTest").exception("ConsulateServer ERROR", stringAsyncResult.cause());
+                                } else {
+                                    Keel.outputLogger("ConsulateTest").info("ConsulateServer START " + stringAsyncResult.result() + " listen on " + consulateServerPort + " -> 127.0.0.1:" + socks5port);
+                                }
+                            });
                 });
     }
 
     private static Future<String> consulateClient() {
         return new ConsulateClient(
                 consulateClientPort,
-                "127.0.0.1",
+                "sample.com",
                 consulateServerPort,
                 "/consulate"
-                //"http://127.0.0.1:" + consulateServerPort + "/consulate"
         )
                 .deployMe()
                 .onComplete(stringAsyncResult -> {
