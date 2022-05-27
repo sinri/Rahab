@@ -22,13 +22,22 @@ public class Socks5ProxyExecutor extends RahabExecutor {
                         .setRequired(true)
                         .setLongName("port")
                         .setDescription("使用的端口")
+                )
+                .addOption(new TypedOption<Integer>()
+                        .setType(Integer.class)
+                        .setRequired(false)
+                        .setLongName("idle_timeout_seconds")
+                        .setDescription("空闲超时秒数")
+                        .setDefaultValue("10")
                 );
     }
 
     @Override
     protected void execute(CommandLine commandLine) {
         int port = commandLine.getOptionValue("port");
+        int idle_timeout_seconds = commandLine.getOptionValue("idle_timeout_seconds");
 
-        new RahabSocks5ProxyVerticle(port, Set.of(new RahabSocks5AuthMethod00())).deployMe();
+        new RahabSocks5ProxyVerticle(port, Set.of(new RahabSocks5AuthMethod00()), idle_timeout_seconds)
+                .deployMe();
     }
 }

@@ -92,6 +92,12 @@ public class Rahab {
                 case RahabExecutor.MODE_LIAISON_SOURCE:
                     executor = new LiaisonSourceExecutor(userCommandLineArguments);
                     break;
+                case RahabExecutor.MODE_CONSULATE_CLIENT:
+                    executor = new ConsulateClientExecutor(userCommandLineArguments);
+                    break;
+                case RahabExecutor.MODE_CONSULATE_SERVER:
+                    executor = new ConsulateServerExecutor(userCommandLineArguments);
+                    break;
                 default:
                     executor = new RahabExecutor(userCommandLineArguments) {
                         @Override

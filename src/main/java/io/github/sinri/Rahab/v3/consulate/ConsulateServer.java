@@ -45,6 +45,7 @@ public class ConsulateServer extends KeelVerticle {
         KeelHttpServer keelHttpServer = new KeelHttpServer(
                 Keel.getVertx(),
                 new HttpServerOptions()
+                       // .setTcpKeepAlive(true)
                         .setPort(port),
                 true
         );

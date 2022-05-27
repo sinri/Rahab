@@ -42,7 +42,7 @@ public class Socks5ProxyTest {
         authMethodSet.add(rahabSocks5AuthMethod00);
 //        authMethodSet.add(rahabSocks5AuthMethod02);
 
-        RahabSocks5ProxyVerticle rahabSocks5ProxyVerticle = new RahabSocks5ProxyVerticle(7090, authMethodSet);
+        RahabSocks5ProxyVerticle rahabSocks5ProxyVerticle = new RahabSocks5ProxyVerticle(7090, authMethodSet, 10);
         rahabSocks5ProxyVerticle.deployMe();
 
     }

@@ -17,6 +17,9 @@ abstract public class RahabExecutor {
     final static public String MODE_LIAISON_SOURCE = "LiaisonSource";
     final static public String MODE_SOCKS5_PROXY = "Socks5Proxy";
 
+    final static public String MODE_CONSULATE_CLIENT = "ConsulateClient";
+    final static public String MODE_CONSULATE_SERVER = "ConsulateServer";
+
     private final List<String> userCommandLineArguments;
 
     protected KeelLogger getLogger() {
@@ -46,7 +49,9 @@ abstract public class RahabExecutor {
                                                 RahabExecutor.MODE_WORMHOLE,
                                                 RahabExecutor.MODE_SOCKS5_PROXY,
                                                 RahabExecutor.MODE_LIAISON_SOURCE,
-                                                RahabExecutor.MODE_LIAISON_BROKER
+                                                RahabExecutor.MODE_LIAISON_BROKER,
+                                                RahabExecutor.MODE_CONSULATE_CLIENT,
+                                                RahabExecutor.MODE_CONSULATE_SERVER
                                         ),
                                         ","
                                 )

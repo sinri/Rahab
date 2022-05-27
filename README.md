@@ -2,7 +2,7 @@
 
 > By faith the harlot Rahab perished not with them that believed not, when she had received the spies with peace. (Hebrews 11:31)
 
-Run as `java -jar Rahab-2.2.0.jar -h`
+Run as `java -jar Rahab-3.0.1.jar -h`
 
 ## Design
 
@@ -43,3 +43,33 @@ in [HTTP/1.1](https://www.ietf.org/rfc/rfc2068.txt).
 
 An incomplete implementation of [SOCKS Protocol Version 5](https://datatracker.ietf.org/doc/html/rfc1928), for TCP and
 CONNECT only.
+
+### Consulate
+
+```
+        Actual Server
+        [HTTP Server]
+        
+    ↑               | 5 (TCP)
+----|---------------|----
+    | 4 (TCP)       ↓
+    
+        Socks5 Proxy
+        
+    ↑ 3 (TCP)       ↓ 6 (TCP)
+        
+          [TCP Client]
+        Consulate Server
+          [WS Server]
+          
+    ↑               | 7  (WEBSOCKET)
+----|---------------|----
+    | 2 (WEBSOCKET) ↓ 
+          
+          [WS Client]
+        Consulate Client 
+           [Socks5] 
+           
+    ↑ 1 (TCP)       ↓ (TCP)
+  Browser 
+```

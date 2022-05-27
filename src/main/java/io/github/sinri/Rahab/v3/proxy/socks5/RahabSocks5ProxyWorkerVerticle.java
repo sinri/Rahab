@@ -26,21 +26,23 @@ class RahabSocks5ProxyWorkerVerticle extends KeelVerticle {
     private final NetSocket socketFromClient;
     private final String requestID;
 
-    /**
-     * 连接目标服务器的客户端
-     */
-    protected NetClient clientToActualServer;
+
     /**
      * 本代理支持的鉴权方法
      */
     protected Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap;
+    private final NetClient clientToActualServer;
 
-    public RahabSocks5ProxyWorkerVerticle(NetSocket socketFromClient, String requestID, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap) {
+    public RahabSocks5ProxyWorkerVerticle(
+            NetSocket socketFromClient,
+            String requestID,
+            Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap,
+            NetClient clientToActualServer
+    ) {
         this.socketFromClient = socketFromClient;
         this.requestID = requestID;
-
-        this.clientToActualServer = Keel.getVertx().createNetClient();
         this.supportedAuthMethodMap = supportedAuthMethodMap;
+        this.clientToActualServer = clientToActualServer;
     }
 
     @Override
