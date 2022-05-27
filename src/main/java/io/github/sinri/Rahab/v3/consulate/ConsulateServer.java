@@ -69,6 +69,7 @@ public class ConsulateServer extends KeelVerticle {
                         .setConfig(new JsonObject()
                                 .put("socks5_host", socks5host)
                                 .put("socks5_port", socks5port)
+                                .put("ws_path", websocketPath)
                         )
         );
 

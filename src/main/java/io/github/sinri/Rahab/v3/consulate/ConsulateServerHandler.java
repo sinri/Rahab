@@ -4,6 +4,7 @@ import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.logger.KeelLogLevel;
 import io.github.sinri.keel.core.logger.KeelLogger;
 import io.github.sinri.keel.web.websockets.KeelWebSocketHandler;
+import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.ServerWebSocket;
 import io.vertx.core.net.NetClient;
@@ -14,6 +15,7 @@ import java.util.Date;
 import java.util.Queue;
 
 public class ConsulateServerHandler extends KeelWebSocketHandler {
+
     private final NetClient netClient;
     private NetSocket socketToTargetServer;
 
@@ -35,9 +37,21 @@ public class ConsulateServerHandler extends KeelWebSocketHandler {
         //return 10000;
     }
 
+    protected String getWebsocketPath() {
+        return config().getString("ws_path");
+    }
+
     @Override
     protected KeelLogger prepareLogger() {
         return Keel.standaloneLogger(getClass().getSimpleName()).setCategoryPrefix((new Date().getTime()) + "-" + deploymentID());
+    }
+
+    @Override
+    protected Future<Boolean> shouldReject() {
+        if (!this.getWebSocketPath().equals(getWebsocketPath())) {
+            return Future.succeededFuture(true);
+        }
+        return Future.succeededFuture(false);
     }
 
     @Override
