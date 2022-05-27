@@ -7,7 +7,7 @@ import io.github.sinri.keel.Keel;
 public class ConsulateClientTest {
     public static void main(String[] args) {
         RahabTestKit.init();
-        new ConsulateClient(7090, "http://127.0.0.1:33333/consulate")
+        new ConsulateClient(7090, "127.0.0.1", 33333, "/consulate")
                 .deployMe()
                 .onComplete(stringAsyncResult -> {
                     if (stringAsyncResult.failed()) {

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 public class Rahab {
-    public final static String VERSION = "3.0.0";
+    public final static String VERSION = "3.0.1";
 
     private static void initializeVertx() {
         Keel.loadPropertiesFromFile("config.properties");
@@ -65,7 +65,9 @@ public class Rahab {
                                 RahabExecutor.MODE_WORMHOLE,
                                 RahabExecutor.MODE_SOCKS5_PROXY,
                                 RahabExecutor.MODE_LIAISON_SOURCE,
-                                RahabExecutor.MODE_LIAISON_BROKER
+                                RahabExecutor.MODE_LIAISON_BROKER,
+                                RahabExecutor.MODE_CONSULATE_CLIENT,
+                                RahabExecutor.MODE_CONSULATE_SERVER
                         ))
                         .setRequired(true)
                         .setDescription("运行模式")

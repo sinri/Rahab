@@ -13,17 +13,21 @@ public class ConsulateClient extends KeelVerticle {
     private final NetServer serverAsSocks5Proxy;
     private final HttpClient websocketClient;
     private final int port;
-    private final String serverWebSocketURI;
+    //    private final String serverWebSocketURI;
+    private final String wsPath;
 
-    public ConsulateClient(int port, String serverWebSocketURI) {
+    public ConsulateClient(int port, String wsHost, int wsPort, String wsPath) {
         this.port = port;
-        this.serverWebSocketURI = serverWebSocketURI;
+//        this.serverWebSocketURI = serverWebSocketURI;
 
         serverAsSocks5Proxy = Keel.getVertx().createNetServer();
         websocketClient = Keel.getVertx().createHttpClient(
                 new HttpClientOptions()
+                        .setDefaultHost(wsHost)
+                        .setDefaultPort(wsPort)
                         .setIdleTimeout(10).setIdleTimeoutUnit(TimeUnit.SECONDS)
         );
+        this.wsPath = wsPath;
     }
 
 //    protected int getSocks5ProxyPort() {
@@ -45,7 +49,7 @@ public class ConsulateClient extends KeelVerticle {
                     getLogger().info("接受到用户请求 from " + socketFromBrowser.remoteAddress());
                     // 接受到客户端的socks5代理请求
                     ConsulateClientHandler consulateClientHandler = new ConsulateClientHandler(
-                            serverWebSocketURI,
+                            wsPath,
                             socketFromBrowser,
                             websocketClient
                     );

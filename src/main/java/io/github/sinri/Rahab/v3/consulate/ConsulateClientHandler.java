@@ -6,7 +6,6 @@ import io.github.sinri.keel.verticles.KeelVerticle;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.WebSocket;
-import io.vertx.core.http.WebSocketConnectOptions;
 import io.vertx.core.net.NetSocket;
 
 import java.util.ArrayDeque;
@@ -15,14 +14,16 @@ import java.util.Queue;
 
 class ConsulateClientHandler extends KeelVerticle {
     private WebSocket webSocketToServer;
-    private final String absoluteURI;
+    //    private final String absoluteURI;
+    private final String wsPath;
     private final NetSocket socketFromBrowser;
     private final HttpClient websocketClient;
 
     private final Queue<Buffer> readBufferQueue = new ArrayDeque<>();
 
-    public ConsulateClientHandler(String absoluteURI, NetSocket socketFromBrowser, HttpClient websocketClient) {
-        this.absoluteURI = absoluteURI;
+    public ConsulateClientHandler(String wsPath, NetSocket socketFromBrowser, HttpClient websocketClient) {
+//        this.absoluteURI = absoluteURI;
+        this.wsPath = wsPath;
         this.socketFromBrowser = socketFromBrowser;
         this.websocketClient = websocketClient;
     }
@@ -76,10 +77,11 @@ class ConsulateClientHandler extends KeelVerticle {
 
     private void setupWebSocketToServer() {
         getLogger().debug("建立 与 ws 服务器 的 通信 ...");
-        WebSocketConnectOptions webSocketConnectOptions = new WebSocketConnectOptions();
-        webSocketConnectOptions.setAbsoluteURI(this.absoluteURI);
+        //WebSocketConnectOptions webSocketConnectOptions = new WebSocketConnectOptions();
+        //webSocketConnectOptions.setAbsoluteURI(this.absoluteURI);
         this.websocketClient
-                .webSocket(webSocketConnectOptions)
+                .webSocket(wsPath)
+                //.webSocket(webSocketConnectOptions)
                 .onFailure(throwable -> {
                     getLogger().exception("建立 与 ws 服务器 的 通信 失败", throwable);
                     this.socketFromBrowser.close()

@@ -62,7 +62,13 @@ public class ConsulateTest {
     }
 
     private static Future<String> consulateClient() {
-        return new ConsulateClient(consulateClientPort, "http://127.0.0.1:" + consulateServerPort + "/consulate")
+        return new ConsulateClient(
+                consulateClientPort,
+                "127.0.0.1",
+                consulateServerPort,
+                "/consulate"
+                //"http://127.0.0.1:" + consulateServerPort + "/consulate"
+        )
                 .deployMe()
                 .onComplete(stringAsyncResult -> {
                     if (stringAsyncResult.failed()) {
