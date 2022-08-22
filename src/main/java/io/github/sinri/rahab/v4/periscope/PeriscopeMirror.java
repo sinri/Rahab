@@ -9,12 +9,13 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-public class PeriscopeMirror extends Periscope {
+public class PeriscopeMirror {
     private final int port;
     private final KeelLogger logger;
     private NetSocket socketFromLens;
@@ -34,7 +35,7 @@ public class PeriscopeMirror extends Periscope {
         return logger;
     }
 
-    public void start() {
+    public void run() {
         Keel.getVertx().createNetServer()
                 .connectHandler(socket -> {
                     SocketAgent socketAgent = new SocketAgent(this, socket);
@@ -138,6 +139,21 @@ public class PeriscopeMirror extends Periscope {
                         return Future.succeededFuture(true);
                     }
                     String viewerIdentity = photon.getIdentity();
+
+                    if (Objects.equals("PeriscopeLens", viewerIdentity)) {
+                        if (Objects.equals(photon.toBuffer().toString(), "PING")) {
+                            // just ping!
+                            mirror.socketFromLens.write(
+                                    Photon.create("PeriscopeMirror", Buffer.buffer().appendString("PONG"))
+                                            .toBuffer()
+                            );
+                            if (mirror.socketFromLens.writeQueueFull()) {
+                                mirror.socketFromLens.pause();
+                            }
+                            return Future.succeededFuture(false);
+                        }
+                    }
+
                     NetSocket socketToViewer = mirror.socketToViewerMap.get(viewerIdentity);
                     if (socketToViewer == null) {
                         getLogger().error("SOCKET TO VIEWER LOST");

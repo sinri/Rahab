@@ -2,7 +2,7 @@ package io.github.sinri.rahab.v4a.executive;
 
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.github.sinri.rahab.Rahab;
+import io.github.sinri.rahab.v4a.Rahab;
 import io.vertx.core.cli.CLI;
 import io.vertx.core.cli.CommandLine;
 import io.vertx.core.cli.Option;

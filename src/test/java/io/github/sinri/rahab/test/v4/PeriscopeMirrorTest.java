@@ -21,6 +21,6 @@ public class PeriscopeMirrorTest {
         );
 
         PeriscopeMirror periscopeMirror = new PeriscopeMirror(20000);
-        periscopeMirror.start();
+        periscopeMirror.run();
     }
 }

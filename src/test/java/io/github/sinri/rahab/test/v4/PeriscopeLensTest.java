@@ -24,6 +24,6 @@ public class PeriscopeLensTest {
                 "127.0.0.1", 20000,
                 "127.0.0.1", 20002
         );
-        periscopeLens.start();
+        periscopeLens.run();
     }
 }

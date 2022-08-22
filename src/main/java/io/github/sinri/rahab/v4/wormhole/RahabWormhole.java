@@ -17,7 +17,7 @@ public class RahabWormhole {
         this.wormholePort = wormholePort;
         this.targetHost = targetHost;
         this.targetPort = targetPort;
-        this.logger = Keel.outputLogger("RahabWormholeServer");
+        this.logger = Keel.standaloneLogger("RahabWormholeServer");
         this.server = Keel.getVertx().createNetServer();
         this.clientToTarget = Keel.getVertx().createNetClient();
     }

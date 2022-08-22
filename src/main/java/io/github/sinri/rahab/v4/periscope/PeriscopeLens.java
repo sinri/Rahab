@@ -10,11 +10,12 @@ import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-public class PeriscopeLens extends Periscope {
+public class PeriscopeLens {
     private final NetClient netClient;
     private final String mirrorHost;
     private final int mirrorPort;
@@ -47,7 +48,7 @@ public class PeriscopeLens extends Periscope {
         return this;
     }
 
-    public void start() {
+    public void run() {
         this.netClient.connect(mirrorPort, mirrorHost)
                 .compose(socket -> {
                     String lockName = "LockForPeriscopeLensRecordBufferFromMirror";
@@ -56,9 +57,7 @@ public class PeriscopeLens extends Periscope {
                             .handler(bufferFromMirror -> {
                                 Keel.getVertx().sharedData().getLock(lockName)
                                         .onSuccess(lock -> {
-                                            this.sisiodosi.drop(v -> {
-                                                return this.handleBufferFromMirror(bufferFromMirror);
-                                            });
+                                            this.sisiodosi.drop(v -> this.handleBufferFromMirror(bufferFromMirror));
                                             lock.release();
                                         })
                                         .onFailure(throwable -> {
@@ -79,13 +78,40 @@ public class PeriscopeLens extends Periscope {
                                 this.logger.info("socketToMirror CLOSE");
                             });
 
-                    return this.socketToMirror.write("[PeriscopeLensReport]");
-                    //Photon registerPhoton = Photon.create(Buffer.buffer("LENS"), Buffer.buffer("REGISTER"));
-                    //return this.socketToMirror.write(registerPhoton.toBuffer());
+                    return this.socketToMirror.write("[PeriscopeLensReport]")
+                            .onSuccess(written -> {
+                                Keel.getVertx().setTimer(10_000L, timer -> {
+                                    ping();
+                                });
+                            });
                 }, throwable -> {
                     this.logger.exception("CONNECT FAILED", throwable);
                     return Keel.getVertx().close();
                 });
+    }
+
+    private void ping() {
+        this.socketToMirror.write(
+                        Photon.create("PeriscopeLens", Buffer.buffer().appendString("PING"))
+                                .toBuffer()
+                )
+                .onFailure(throwable -> {
+                    logger.debug("PING SENDING FAILED, TO RESTART LATER");
+                    Keel.getVertx().setTimer(10_000L, timer -> {
+                        this.socketToMirror.close();
+                        this.socketToMirror = null;
+                        run();
+                    });
+                })
+                .onSuccess(done -> {
+                    logger.debug("PING SENT");
+                    Keel.getVertx().setTimer(10_000L, timer -> {
+                        ping();
+                    });
+                });
+        if (this.socketToMirror.writeQueueFull()) {
+            this.socketToMirror.pause();
+        }
     }
 
     /**
@@ -120,6 +146,13 @@ public class PeriscopeLens extends Periscope {
         // 1. seek/create the socket to target of terminal
         String identity = photon.getIdentityBuffer().toString();
         Buffer contentBuffer = photon.getContentBuffer();
+
+        if (Objects.equals("PeriscopeMirror", identity)) {
+            if (Objects.equals("PONG", contentBuffer.toString())) {
+                logger.debug("PONG received");
+                return Future.succeededFuture();
+            }
+        }
 
         return getSocketToTargetMap(identity)
                 .compose(socket -> {
