@@ -1,11 +1,12 @@
 package io.github.sinri.rahab.test.v4;
 
 import io.github.sinri.keel.Keel;
-import io.github.sinri.rahab.v4.proxy.socks5.RahabSocks5Proxy;
+import io.github.sinri.rahab.v4.liaison.meta.SourceOptions;
+import io.github.sinri.rahab.v4.liaison.source.RahabLiaisonSource;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 
-public class Socks5ProxyTest {
+public class LiaisonSourceTest {
     public static void main(String[] args) {
         Keel.loadPropertiesFromFile("config.properties");
         Keel.initializeVertx(new VertxOptions()
@@ -20,16 +21,13 @@ public class Socks5ProxyTest {
                 )
         );
 
-        RahabSocks5Proxy rahabSocks5Proxy = new RahabSocks5Proxy(20002);
-//        RahabSocks5Proxy rahabSocks5Proxy = new RahabSocks5Proxy(
-//                20002,
-//                RahabSocks5AuthMethod.createBasicAuthMap(new RahabSocks5AuthMethod02.UsernamePasswordVerifier() {
-//                    @Override
-//                    public Future<Boolean> verify(String username, String password) {
-//                        return Future.succeededFuture(Objects.equals(username, password));
-//                    }
-//                })
-//        );
-        rahabSocks5Proxy.run();
+        RahabLiaisonSource source = new RahabLiaisonSource(new SourceOptions()
+                .setSourceName("Local")
+                .setBrokerHost("127.0.0.1")
+                .setBrokerPort(20001)
+                .setProxyHost("127.0.0.1")
+                .setProxyPort(20002)
+        );
+        source.run();
     }
 }

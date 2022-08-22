@@ -42,21 +42,31 @@ public class RahabSocks5AuthMethod02 extends RahabSocks5AuthMethod {
         String u = new String(username);
         String p = new String(password);
         return this.usernamePasswordVerifier.verify(u, p)
-                .compose(aBoolean -> this.getSocketWithClient()
-                        .write(Buffer.buffer()
-                                .appendByte((byte) 0x01)
-                                .appendByte(aBoolean ? (byte) 0x00 : (byte) 0x01)
-                        )
-                        .onComplete(voidAsyncResult -> {
-                            if (voidAsyncResult.failed()) {
-                                getLogger().exception("writing failed", voidAsyncResult.cause());
-                                getLogger().error("TO CLOSE CLIENT SOCKET");
-                                getSocketWithClient().close();
-                            } else {
-                                getLogger().info("WRITING DONE");
-                            }
-                        })
-                        .compose(v -> Future.succeededFuture(u)));
+                .recover(throwable -> {
+                    getLogger().exception("UsernamePasswordVerifier exception, TAKE IT AS FALSE", throwable);
+                    return Future.succeededFuture(false);
+                })
+                .compose(
+                        aBoolean -> {
+                            getLogger().info("VERIFIED: " + aBoolean);
+                            return this.getSocketWithClient()
+                                    .write(Buffer.buffer()
+                                            .appendByte((byte) 0x01)
+                                            .appendByte(aBoolean ? (byte) 0x00 : (byte) 0x01)
+                                    )
+                                    .compose(
+                                            written -> {
+                                                getLogger().info("WRITING DONE");
+                                                return Future.succeededFuture(u);
+                                            },
+                                            throwable -> {
+                                                getLogger().exception("writing failed", throwable);
+                                                getLogger().error("TO CLOSE CLIENT SOCKET");
+                                                // getSocketWithClient().close();
+                                                return Future.failedFuture(new Exception("writing auth resp to client failed", throwable));
+                                            }
+                                    );
+                        });
     }
 
     abstract public static class UsernamePasswordVerifier {
