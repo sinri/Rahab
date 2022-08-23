@@ -1,7 +1,7 @@
 package io.github.sinri.rahab.v4.proxy.socks5.auth;
 
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.tcp.KeelAbstractSocketWrapper;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
 import io.vertx.core.Future;

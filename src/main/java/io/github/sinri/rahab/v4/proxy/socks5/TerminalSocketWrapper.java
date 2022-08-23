@@ -1,13 +1,17 @@
 package io.github.sinri.rahab.v4.proxy.socks5;
 
 import io.github.sinri.keel.Keel;
+import io.github.sinri.keel.core.controlflow.FutureUntil;
 import io.github.sinri.keel.core.logger.KeelLogLevel;
-import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.tcp.KeelAbstractSocketWrapper;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.RahabSocks5AuthMethod;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.core.datagram.DatagramSocket;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
+import io.vertx.core.net.SocketAddress;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -15,7 +19,9 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     private final Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap;
@@ -24,15 +30,30 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     private RahabSocks5AuthMethod rahabSocks5AuthMethod;
     private final AtomicReference<ProtocolStepEnum> protocolStepEnum = new AtomicReference<>(ProtocolStepEnum.STEP_1_CONFIRM_METHOD);
 
+    private final byte[] localAddressByteArray;
+    private final short localPortShort;
+    private DatagramSocket relatedRelayUDP;
+
     private TerminalSocketWrapper(NetSocket socket, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
         super(socket);
         setLogger(Keel.standaloneLogger("RahabSocks5Proxy"));
         this.supportedAuthMethodMap = supportedAuthMethodMap;
         this.clientToActualServer = clientToActualServer;
+
+        this.localAddressByteArray = Keel.netHelper().convertIPv4ToAddressBytes(this.getLocalAddress().hostAddress());
+        this.localPortShort = (short) this.getLocalAddress().port();
     }
 
     public static TerminalSocketWrapper handle(NetSocket socket, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
         return new TerminalSocketWrapper(socket, supportedAuthMethodMap, clientToActualServer);
+    }
+
+    @Override
+    protected void whenClose() {
+        super.whenClose();
+        if (this.relatedRelayUDP != null) {
+            this.relatedRelayUDP.close();
+        }
     }
 
     @Override
@@ -141,50 +162,56 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
         ptr += 1;
         getLogger().debug("CMD BYTE IS " + cmd);
 
-        // ATYP 目标地址类型，DST.ADDR的数据对应这个字段的类型。
-        // 0x01表示IPv4地址，DST.ADDR为4个字节
-        // 0x03表示域名，DST.ADDR是一个可变长度的域名
-        // 0x04表示IPv6地址，DST.ADDR为16个字节长度
-        byte addressType = bufferFromClient.getByte(ptr);
-        ptr += 1;
+        RFC1928AddressBytesParser rfc1928AddressBytesParser = new RFC1928AddressBytesParser(bufferFromClient.getBuffer(ptr, bufferFromClient.length()));
+        byte addressType = rfc1928AddressBytesParser.getAddressType();
+        String destinationAddress = rfc1928AddressBytesParser.getDestinationAddress();
+        byte[] rawDestinationAddress = rfc1928AddressBytesParser.getRawDestinationAddress();
+        short rawDestinationPort = rfc1928AddressBytesParser.getRawDestinationPort();
 
-        byte[] rawDestinationAddress;
-        String destinationAddress;
-        if (addressType == 0x01) {
-            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 4);
-            ptr += 4;
-
-            try {
-                destinationAddress = Inet4Address.getByAddress(rawDestinationAddress).getHostAddress();
-            } catch (UnknownHostException e) {
-                destinationAddress = null;
-            }
-        } else if (addressType == 0x03) {
-            // the address field contains a fully-qualified domain name.
-            // The first octet of the address field contains the number of octets of name that follow,
-            //  there is no terminating NUL octet.
-            byte domainLength = bufferFromClient.getByte(ptr);
-            ptr += 1;
-            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + domainLength);
-            ptr += domainLength;
-            destinationAddress = new String(rawDestinationAddress);
-        } else if (addressType == 0x04) {
-            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 16);
-            ptr += 16;
-
-            try {
-                destinationAddress = Inet6Address.getByAddress(rawDestinationAddress).getHostAddress();
-            } catch (UnknownHostException e) {
-                destinationAddress = null;
-            }
-        } else {
-            getLogger().warning("addressType unknown " + addressType);
-            rawDestinationAddress = null;
-            destinationAddress = null;
-        }
-
-        short rawDestinationPort = bufferFromClient.getShort(ptr);
-        ptr += 2;
+//        // ATYP 目标地址类型，DST.ADDR的数据对应这个字段的类型。
+//        // 0x01表示IPv4地址，DST.ADDR为4个字节
+//        // 0x03表示域名，DST.ADDR是一个可变长度的域名
+//        // 0x04表示IPv6地址，DST.ADDR为16个字节长度
+//        byte addressType = bufferFromClient.getByte(ptr);
+//        ptr += 1;
+//
+//        byte[] rawDestinationAddress;
+//        String destinationAddress;
+//        if (addressType == 0x01) {
+//            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 4);
+//            ptr += 4;
+//
+//            try {
+//                destinationAddress = Inet4Address.getByAddress(rawDestinationAddress).getHostAddress();
+//            } catch (UnknownHostException e) {
+//                destinationAddress = null;
+//            }
+//        } else if (addressType == 0x03) {
+//            // the address field contains a fully-qualified domain name.
+//            // The first octet of the address field contains the number of octets of name that follow,
+//            //  there is no terminating NUL octet.
+//            byte domainLength = bufferFromClient.getByte(ptr);
+//            ptr += 1;
+//            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + domainLength);
+//            ptr += domainLength;
+//            destinationAddress = new String(rawDestinationAddress);
+//        } else if (addressType == 0x04) {
+//            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 16);
+//            ptr += 16;
+//
+//            try {
+//                destinationAddress = Inet6Address.getByAddress(rawDestinationAddress).getHostAddress();
+//            } catch (UnknownHostException e) {
+//                destinationAddress = null;
+//            }
+//        } else {
+//            getLogger().warning("addressType unknown " + addressType);
+//            rawDestinationAddress = null;
+//            destinationAddress = null;
+//        }
+//
+//        short rawDestinationPort = bufferFromClient.getShort(ptr);
+//        ptr += 2;
 
         getLogger().notice("TARGET " + destinationAddress + ":" + rawDestinationPort);
 
@@ -203,12 +230,13 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
                 //  since such servers are often multi-homed.
                 // It is expected that the SOCKS server will use `DST.ADDR` and DST.PORT,
                 //   and the client-side source address and port in evaluating the CONNECT request.
-                getLogger().info("CONNECT 准备连接目标服务");
+                getLogger().info("CONNECT", new JsonObject()
+                        .put("address", destinationAddress)
+                        .put("port", rawDestinationPort)
+                );
                 return this.clientToActualServer
                         .connect(rawDestinationPort, destinationAddress)
-                        .compose(socketToTarget -> {
-                            return handleSocketToActualServer(socketToTarget);
-                        }, throwable -> {
+                        .compose(this::handleSocketToActualServer, throwable -> {
                             // cannot !
                             getLogger().exception("CONNECT TO TARGET FAILED, TO RESPOND AND CLOSE", throwable);
                             // send 0x01 general SOCKS server failure
@@ -249,8 +277,87 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
             } else if (cmd == 0x03) {
                 // UDP ASSOCIATE
                 getLogger().info("UDP ASSOCIATE 准备组建UDP连接");
-                getLogger().warning("目前不支持这玩意");
-                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
+//                getLogger().warning("目前不支持这玩意");
+//                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
+                // TODO challenge!
+                //
+                // 此时DST.ADDR[destinationAddress]和DST.PORT[rawDestinationPort]代表客户端UDP准备发送的地址和端口
+                // 用于服务器权限控制（只给DST.ADDR:DST.PORT发出来的udp包代理），当然可以为空即全是0
+                this.relatedRelayUDP = Keel.getVertx().createDatagramSocket();
+                AtomicInteger listenRetry = new AtomicInteger(0);
+                AtomicInteger portRef = new AtomicInteger();
+                return FutureUntil.call(new Supplier<Future<Boolean>>() {
+                            @Override
+                            public Future<Boolean> get() {
+                                if (listenRetry.get() > 3) {
+                                    return Future.failedFuture("LISTEN RETRY OVER 3 TIMES");
+                                }
+                                int port = (int) (21000 + Math.random() * 500 * 2);
+                                return relatedRelayUDP.listen(port, "0.0.0.0")
+                                        .compose(done -> {
+                                            portRef.set(port);
+
+                                            relatedRelayUDP.handler(datagramPacket -> {
+                                                        SocketAddress sender = datagramPacket.sender();
+                                                        Buffer udpDataBuffer = datagramPacket.data();
+                                                        getLogger().info("[UDP:" + port + "] RECEIVED " + udpDataBuffer.length() + " bytes FROM " + sender.hostAddress() + ":" + sender.port());
+                                                        getLogger().buffer(udpDataBuffer);
+
+                                                        Buffer rsv = udpDataBuffer.getBuffer(0, 2);// Reserved X'0000'
+                                                        var frag = udpDataBuffer.getByte(2);//Current fragment number
+                                                        RFC1928AddressBytesParser rfc1928AddressBytesParserUDP = new RFC1928AddressBytesParser(udpDataBuffer.getBuffer(3, udpDataBuffer.length()));
+                                                        byte addressTypeUDP = rfc1928AddressBytesParserUDP.getAddressType();
+                                                        String destinationAddressUDP = rfc1928AddressBytesParserUDP.getDestinationAddress();
+                                                        short rawDestinationPortUDP = rfc1928AddressBytesParserUDP.getRawDestinationPort();
+                                                        Buffer data = rfc1928AddressBytesParserUDP.getRestBuffer();
+
+                                                        Keel.getVertx().createDatagramSocket()
+                                                                .listen(port + 1, "0.0.0.0")
+                                                                .compose(datagramSocketToTarget -> {
+                                                                    datagramSocketToTarget.handler(datagramPacketFromTarget -> {
+                                                                        Buffer bufferToRespond = Buffer.buffer();
+                                                                        bufferToRespond.appendByte((byte) 0).appendByte((byte) 0);//rsv
+                                                                        bufferToRespond.appendByte((byte) 0);//frag
+                                                                        bufferToRespond.appendByte(addressType);
+                                                                        bufferToRespond.appendBytes(
+                                                                                Keel.netHelper().convertIPv4ToAddressBytes(sender.hostAddress())
+                                                                        );
+                                                                        bufferToRespond.appendShort((short) sender.port());
+                                                                        bufferToRespond.appendBuffer(data);
+
+                                                                        // todo send
+                                                                        throw new RuntimeException("TODO");
+                                                                    });
+                                                                    return Future.succeededFuture();
+                                                                });
+
+
+                                                    })
+                                                    .endHandler(end -> {
+                                                        getLogger().info("[UDP:" + port + "] END");
+                                                    })
+                                                    .exceptionHandler(throwable -> {
+                                                        getLogger().exception("[UDP:" + port + "] ERROR", throwable);
+                                                    });
+
+                                            return Future.succeededFuture(true);
+                                        }, throwable -> {
+                                            listenRetry.incrementAndGet();
+                                            return Future.succeededFuture(false);
+                                        });
+                            }
+                        })
+                        .compose(done -> {
+                            getLogger().info("prepared UDP server listen on " + (short) portRef.get());
+                            this.protocolStepEnum.set(ProtocolStepEnum.STEP_5_UDP_PROXY);
+                            return this.respondInStep3((byte) 0x00, addressType, this.localAddressByteArray, (short) portRef.get());
+                        }, throwable -> {
+                            getLogger().exception("failed to prepared UDP server", throwable);
+                            return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0)
+                                    .compose(v -> {
+                                        return this.close();
+                                    });
+                        });
             } else {
                 return Future.failedFuture("UNSUPPORTED CMD");
             }
@@ -338,10 +445,12 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
         getLogger().info("CREATED SOCKET TO TARGET " + socketToActualServer.remoteAddress().toString());
         // send 0x00 succeeded
         protocolStepEnum.set(ProtocolStepEnum.STEP_4_TRANSFER);
-        //todo debug
+        //todo debug: should x1:x2 be
         byte x0 = 0x01;
-        byte[] x1 = new byte[]{0, 0, 0, 0};
-        short x2 = 0;
+//        byte[] x1 = new byte[]{0, 0, 0, 0};
+//        short x2 = 0;
+        byte[] x1 = this.localAddressByteArray;
+        short x2 = this.localPortShort;
 
         // addressType rawDestinationAddress rawDestinationPort
         return this.respondInStep3((byte) 0x00, x0, x1, x2);
@@ -357,4 +466,102 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
                     return socketToActualServer.close();
                 });
     }
+
+    /**
+     * Buffer Since
+     * ↓
+     * ATYP [1] | DST.ADDR [Variable] | DST.PORT [2]
+     */
+    private static class RFC1928AddressBytesParser {
+        private final Buffer bufferFromClient;
+        private byte addressType;
+        private byte[] rawDestinationAddress;
+        private String destinationAddress;
+        private final short rawDestinationPort;
+        private final Buffer restBuffer;
+
+        public RFC1928AddressBytesParser(Buffer buffer) {
+            this.bufferFromClient = buffer;
+            int ptr = 0;
+            ptr = parseAddressType(ptr);
+
+            if (addressType == 0x01) {
+                ptr = parseAddressIPv4(ptr);
+            } else if (addressType == 0x03) {
+                ptr = parseAddressDomain(ptr);
+            } else if (addressType == 0x04) {
+                ptr = parseAddressIPv6(ptr);
+            } else {
+                throw new RuntimeException("Address Type Unknown");
+            }
+
+            rawDestinationPort = bufferFromClient.getShort(ptr);
+            restBuffer = buffer.getBuffer(ptr + 2, buffer.length());
+        }
+
+        private int parseAddressType(int ptr) {
+            // ATYP 目标地址类型，DST.ADDR的数据对应这个字段的类型。
+            // 0x01表示IPv4地址，DST.ADDR为4个字节
+            // 0x03表示域名，DST.ADDR是一个可变长度的域名
+            // 0x04表示IPv6地址，DST.ADDR为16个字节长度
+            this.addressType = bufferFromClient.getByte(ptr);
+            return ptr + 1;
+        }
+
+        private int parseAddressIPv4(int ptr) {
+            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 4);
+
+            try {
+                destinationAddress = Inet4Address.getByAddress(rawDestinationAddress).getHostAddress();
+            } catch (UnknownHostException e) {
+                destinationAddress = null;
+            }
+
+            return ptr + 4;
+        }
+
+        private int parseAddressIPv6(int ptr) {
+            rawDestinationAddress = bufferFromClient.getBytes(ptr, ptr + 16);
+
+            try {
+                destinationAddress = Inet6Address.getByAddress(rawDestinationAddress).getHostAddress();
+            } catch (UnknownHostException e) {
+                destinationAddress = null;
+            }
+
+            return ptr + 16;
+        }
+
+        private int parseAddressDomain(int ptr) {
+            // the address field contains a fully-qualified domain name.
+            // The first octet of the address field contains the number of octets of name that follow,
+            //  there is no terminating NUL octet.
+            byte domainLength = bufferFromClient.getByte(ptr);
+            rawDestinationAddress = bufferFromClient.getBytes(ptr + 1, ptr + 1 + domainLength);
+            destinationAddress = new String(rawDestinationAddress);
+            return ptr + 1 + domainLength;
+        }
+
+        public byte getAddressType() {
+            return addressType;
+        }
+
+        public short getRawDestinationPort() {
+            return rawDestinationPort;
+        }
+
+        public byte[] getRawDestinationAddress() {
+            return rawDestinationAddress;
+        }
+
+        public String getDestinationAddress() {
+            return destinationAddress;
+        }
+
+        public Buffer getRestBuffer() {
+            return restBuffer;
+        }
+    }
+
+
 }

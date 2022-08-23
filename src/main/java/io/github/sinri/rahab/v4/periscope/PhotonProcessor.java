@@ -1,6 +1,6 @@
 package io.github.sinri.rahab.v4.periscope;
 
-import io.github.sinri.keel.web.socket.piece.KeelPieceKit;
+import io.github.sinri.keel.web.tcp.piece.KeelPieceKit;
 import io.vertx.core.buffer.Buffer;
 
 class PhotonProcessor extends KeelPieceKit<Photon> {

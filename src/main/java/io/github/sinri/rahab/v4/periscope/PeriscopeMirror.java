@@ -3,7 +3,7 @@ package io.github.sinri.rahab.v4.periscope;
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.controlflow.FutureUntil;
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.tcp.KeelAbstractSocketWrapper;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;

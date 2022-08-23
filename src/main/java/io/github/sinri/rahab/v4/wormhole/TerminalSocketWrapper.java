@@ -1,6 +1,6 @@
 package io.github.sinri.rahab.v4.wormhole;
 
-import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.tcp.KeelAbstractSocketWrapper;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
