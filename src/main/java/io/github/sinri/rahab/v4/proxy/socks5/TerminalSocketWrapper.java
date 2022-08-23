@@ -1,17 +1,15 @@
 package io.github.sinri.rahab.v4.proxy.socks5;
 
 import io.github.sinri.keel.Keel;
-import io.github.sinri.keel.core.controlflow.FutureUntil;
 import io.github.sinri.keel.core.logger.KeelLogLevel;
 import io.github.sinri.keel.web.tcp.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.tcp.KeelBasicSocketWrapper;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.RahabSocks5AuthMethod;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.datagram.DatagramSocket;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
-import io.vertx.core.net.SocketAddress;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -19,20 +17,17 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     private final Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap;
     private final NetClient clientToActualServer;
-    private NetSocket socketToActualServer;
+    private KeelBasicSocketWrapper socketWrapperToActualServer;
     private RahabSocks5AuthMethod rahabSocks5AuthMethod;
     private final AtomicReference<ProtocolStepEnum> protocolStepEnum = new AtomicReference<>(ProtocolStepEnum.STEP_1_CONFIRM_METHOD);
 
     private final byte[] localAddressByteArray;
     private final short localPortShort;
-    private DatagramSocket relatedRelayUDP;
 
     private TerminalSocketWrapper(NetSocket socket, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
         super(socket);
@@ -51,9 +46,6 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     @Override
     protected void whenClose() {
         super.whenClose();
-        if (this.relatedRelayUDP != null) {
-            this.relatedRelayUDP.close();
-        }
     }
 
     @Override
@@ -165,7 +157,7 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
         RFC1928AddressBytesParser rfc1928AddressBytesParser = new RFC1928AddressBytesParser(bufferFromClient.getBuffer(ptr, bufferFromClient.length()));
         byte addressType = rfc1928AddressBytesParser.getAddressType();
         String destinationAddress = rfc1928AddressBytesParser.getDestinationAddress();
-        byte[] rawDestinationAddress = rfc1928AddressBytesParser.getRawDestinationAddress();
+        //byte[] rawDestinationAddress = rfc1928AddressBytesParser.getRawDestinationAddress();
         short rawDestinationPort = rfc1928AddressBytesParser.getRawDestinationPort();
 
 //        // ATYP 目标地址类型，DST.ADDR的数据对应这个字段的类型。
@@ -277,87 +269,8 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
             } else if (cmd == 0x03) {
                 // UDP ASSOCIATE
                 getLogger().info("UDP ASSOCIATE 准备组建UDP连接");
-//                getLogger().warning("目前不支持这玩意");
-//                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
-                // TODO challenge!
-                //
-                // 此时DST.ADDR[destinationAddress]和DST.PORT[rawDestinationPort]代表客户端UDP准备发送的地址和端口
-                // 用于服务器权限控制（只给DST.ADDR:DST.PORT发出来的udp包代理），当然可以为空即全是0
-                this.relatedRelayUDP = Keel.getVertx().createDatagramSocket();
-                AtomicInteger listenRetry = new AtomicInteger(0);
-                AtomicInteger portRef = new AtomicInteger();
-                return FutureUntil.call(new Supplier<Future<Boolean>>() {
-                            @Override
-                            public Future<Boolean> get() {
-                                if (listenRetry.get() > 3) {
-                                    return Future.failedFuture("LISTEN RETRY OVER 3 TIMES");
-                                }
-                                int port = (int) (21000 + Math.random() * 500 * 2);
-                                return relatedRelayUDP.listen(port, "0.0.0.0")
-                                        .compose(done -> {
-                                            portRef.set(port);
-
-                                            relatedRelayUDP.handler(datagramPacket -> {
-                                                        SocketAddress sender = datagramPacket.sender();
-                                                        Buffer udpDataBuffer = datagramPacket.data();
-                                                        getLogger().info("[UDP:" + port + "] RECEIVED " + udpDataBuffer.length() + " bytes FROM " + sender.hostAddress() + ":" + sender.port());
-                                                        getLogger().buffer(udpDataBuffer);
-
-                                                        Buffer rsv = udpDataBuffer.getBuffer(0, 2);// Reserved X'0000'
-                                                        var frag = udpDataBuffer.getByte(2);//Current fragment number
-                                                        RFC1928AddressBytesParser rfc1928AddressBytesParserUDP = new RFC1928AddressBytesParser(udpDataBuffer.getBuffer(3, udpDataBuffer.length()));
-                                                        byte addressTypeUDP = rfc1928AddressBytesParserUDP.getAddressType();
-                                                        String destinationAddressUDP = rfc1928AddressBytesParserUDP.getDestinationAddress();
-                                                        short rawDestinationPortUDP = rfc1928AddressBytesParserUDP.getRawDestinationPort();
-                                                        Buffer data = rfc1928AddressBytesParserUDP.getRestBuffer();
-
-                                                        Keel.getVertx().createDatagramSocket()
-                                                                .listen(port + 1, "0.0.0.0")
-                                                                .compose(datagramSocketToTarget -> {
-                                                                    datagramSocketToTarget.handler(datagramPacketFromTarget -> {
-                                                                        Buffer bufferToRespond = Buffer.buffer();
-                                                                        bufferToRespond.appendByte((byte) 0).appendByte((byte) 0);//rsv
-                                                                        bufferToRespond.appendByte((byte) 0);//frag
-                                                                        bufferToRespond.appendByte(addressType);
-                                                                        bufferToRespond.appendBytes(
-                                                                                Keel.netHelper().convertIPv4ToAddressBytes(sender.hostAddress())
-                                                                        );
-                                                                        bufferToRespond.appendShort((short) sender.port());
-                                                                        bufferToRespond.appendBuffer(data);
-
-                                                                        // todo send
-                                                                        throw new RuntimeException("TODO");
-                                                                    });
-                                                                    return Future.succeededFuture();
-                                                                });
-
-
-                                                    })
-                                                    .endHandler(end -> {
-                                                        getLogger().info("[UDP:" + port + "] END");
-                                                    })
-                                                    .exceptionHandler(throwable -> {
-                                                        getLogger().exception("[UDP:" + port + "] ERROR", throwable);
-                                                    });
-
-                                            return Future.succeededFuture(true);
-                                        }, throwable -> {
-                                            listenRetry.incrementAndGet();
-                                            return Future.succeededFuture(false);
-                                        });
-                            }
-                        })
-                        .compose(done -> {
-                            getLogger().info("prepared UDP server listen on " + (short) portRef.get());
-                            this.protocolStepEnum.set(ProtocolStepEnum.STEP_5_UDP_PROXY);
-                            return this.respondInStep3((byte) 0x00, addressType, this.localAddressByteArray, (short) portRef.get());
-                        }, throwable -> {
-                            getLogger().exception("failed to prepared UDP server", throwable);
-                            return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0)
-                                    .compose(v -> {
-                                        return this.close();
-                                    });
-                        });
+                getLogger().warning("目前不支持这玩意");
+                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
             } else {
                 return Future.failedFuture("UNSUPPORTED CMD");
             }
@@ -414,56 +327,41 @@ class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     }
 
     private Future<Void> handleSocketToActualServer(NetSocket socket) {
-        socketToActualServer = socket;
-        socketToActualServer
-                .handler(bufferFromActualServer -> {
-                    getLogger().info("DATA FROM TARGET TO CLIENT, " + bufferFromActualServer.length() + " bytes");
-
-                    this.write(bufferFromActualServer)
-                            .onComplete(voidAsyncResult -> {
-                                if (voidAsyncResult.failed()) {
-                                    getLogger().exception("FAILED TO TRANSFER DATA FROM TARGET TO CLIENT, TO CLOSE", voidAsyncResult.cause());
-                                    socketToActualServer.close();
-                                } else {
-                                    getLogger().info("TRANSFERRED DATA FROM TARGET TO CLIENT");
-                                }
+        this.socketWrapperToActualServer = new KeelBasicSocketWrapper(socket);
+        this.socketWrapperToActualServer.setLogger(getLogger());
+        this.socketWrapperToActualServer
+                .setIncomingBufferProcessor(bufferFromActualServer -> {
+                    return this.write(bufferFromActualServer)
+                            .compose(written -> {
+                                getLogger().info("TRANSFERRED DATA FROM TARGET TO CLIENT");
+                                return Future.succeededFuture();
+                            }, throwable -> {
+                                getLogger().exception("FAILED TO TRANSFER DATA FROM TARGET TO CLIENT, TO CLOSE", throwable);
+                                return this.socketWrapperToActualServer.close();
                             });
                 })
-                .endHandler(v -> {
-                    getLogger().notice("END READ TARGET");
+                .setExceptionHandler(throwable -> {
+                    this.socketWrapperToActualServer.close();
                 })
-                .exceptionHandler(throwable -> {
-                    getLogger().exception("EXCEPTION WITH TARGET, TO CLOSE", throwable);
-                    socketToActualServer.close();
-                })
-                .closeHandler(v -> {
-                    getLogger().notice("CLOSE WITH TARGET, TO CLOSE WITH CLIENT");
+                .setCloseHandler(close -> {
                     close();
                 });
 
         //atomicSocketToActualServer.set(socketToActualServer);
-        getLogger().info("CREATED SOCKET TO TARGET " + socketToActualServer.remoteAddress().toString());
+        getLogger().info("CREATED SOCKET TO TARGET " + socketWrapperToActualServer.getRemoteAddressString());
         // send 0x00 succeeded
         protocolStepEnum.set(ProtocolStepEnum.STEP_4_TRANSFER);
-        //todo debug: should x1:x2 be
-        byte x0 = 0x01;
-//        byte[] x1 = new byte[]{0, 0, 0, 0};
-//        short x2 = 0;
-        byte[] x1 = this.localAddressByteArray;
-        short x2 = this.localPortShort;
-
-        // addressType rawDestinationAddress rawDestinationPort
-        return this.respondInStep3((byte) 0x00, x0, x1, x2);
+        return this.respondInStep3((byte) 0x00, (byte) 0x01, this.localAddressByteArray, this.localPortShort);
     }
 
     private Future<Void> handlerStep4(Buffer bufferFromClient) {
-        return socketToActualServer.write(bufferFromClient)
+        return socketWrapperToActualServer.write(bufferFromClient)
                 .compose(done -> {
                     getLogger().info("TRANSFERRED DATA FROM CLIENT TO TARGET");
                     return Future.succeededFuture();
                 }, throwable -> {
                     getLogger().exception("FAILED TO TRANSFER DATA FROM CLIENT TO TARGET", throwable);
-                    return socketToActualServer.close();
+                    return socketWrapperToActualServer.close();
                 });
     }
 
