@@ -44,10 +44,11 @@ public class RahabSocks5Proxy {
     public void run() {
         getLogger().info("READY, PORT " + this.listenPort);
         this.socks5Server
-                .connectHandler(socket -> {
-                    new ClientConnectionHandler(this.supportedAuthMethodMap, this.clientToActualServer)
-                            .handle(socket);
-                })
+                .connectHandler(socket -> TerminalSocketWrapper.handle(
+                        socket,
+                        this.supportedAuthMethodMap,
+                        this.clientToActualServer
+                ))
                 .exceptionHandler(throwable -> {
                     // Set an exception handler called for socket errors happening before the connection
                     //  is passed to the connectHandler(io.vertx.core.Handler<io.vertx.core.net.NetSocket>),

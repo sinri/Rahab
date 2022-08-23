@@ -1,11 +1,11 @@
 package io.github.sinri.rahab.v4.proxy.socks5.auth;
 
 import io.github.sinri.keel.core.logger.KeelLogger;
+import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.impl.RahabSocks5AuthMethod00;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.impl.RahabSocks5AuthMethod02;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.net.NetSocket;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,7 +22,7 @@ abstract public class RahabSocks5AuthMethod {
      */
     abstract public byte getMethodByte();
 
-    private NetSocket socketWithClient;
+    private KeelAbstractSocketWrapper socketWrapperWithClient;
     private KeelLogger logger;
 
     public RahabSocks5AuthMethod setLogger(KeelLogger logger) {
@@ -34,13 +34,13 @@ abstract public class RahabSocks5AuthMethod {
         return logger;
     }
 
-    public RahabSocks5AuthMethod setSocketWithClient(NetSocket socketWithClient) {
-        this.socketWithClient = socketWithClient;
+    public RahabSocks5AuthMethod setSocketWithClient(KeelAbstractSocketWrapper socketWrapperWithClient) {
+        this.socketWrapperWithClient = socketWrapperWithClient;
         return this;
     }
 
-    protected NetSocket getSocketWithClient() {
-        return socketWithClient;
+    public KeelAbstractSocketWrapper getSocketWrapperWithClient() {
+        return socketWrapperWithClient;
     }
 
     abstract public Future<String> verifyIdentity(Buffer buffer);

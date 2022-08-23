@@ -28,10 +28,7 @@ public class RahabWormhole {
 
     public void run() {
         this.server
-                .connectHandler(socket -> {
-                    new RahabWormholeWorker(socket, clientToTarget, targetHost, targetPort)
-                            .handle();
-                })
+                .connectHandler(socket -> TerminalSocketWrapper.build(socket, clientToTarget, targetHost, targetPort))
                 .exceptionHandler(throwable -> {
                     getLogger().exception("server exception", throwable);
                 })

@@ -2,10 +2,9 @@ package io.github.sinri.rahab.v4.proxy.socks5;
 
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.logger.KeelLogLevel;
-import io.github.sinri.keel.core.logger.KeelLogger;
+import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.RahabSocks5AuthMethod;
 import io.vertx.core.Future;
-import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
@@ -14,91 +13,57 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-class ClientConnectionHandler implements Handler<NetSocket> {
-
-    private final KeelLogger logger;
+class TerminalSocketWrapper extends KeelAbstractSocketWrapper {
     private final Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap;
     private final NetClient clientToActualServer;
     private NetSocket socketToActualServer;
-    private NetSocket socketFromClient;
     private RahabSocks5AuthMethod rahabSocks5AuthMethod;
     private final AtomicReference<ProtocolStepEnum> protocolStepEnum = new AtomicReference<>(ProtocolStepEnum.STEP_1_CONFIRM_METHOD);
 
-    public ClientConnectionHandler(Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
-        this.logger = Keel.standaloneLogger("RahabSocks5Proxy");
+    private TerminalSocketWrapper(NetSocket socket, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
+        super(socket);
+        setLogger(Keel.standaloneLogger("RahabSocks5Proxy"));
         this.supportedAuthMethodMap = supportedAuthMethodMap;
         this.clientToActualServer = clientToActualServer;
     }
 
-    protected KeelLogger getLogger() {
-        return logger;
+    public static TerminalSocketWrapper handle(NetSocket socket, Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
+        return new TerminalSocketWrapper(socket, supportedAuthMethodMap, clientToActualServer);
     }
 
     @Override
-    public void handle(NetSocket socket) {
-        this.socketFromClient = socket;
-
-        // handle socket from client
-        String requestID = (new Date().getTime())
-                + "-" + socketFromClient.remoteAddress().hostAddress() + ":" + socketFromClient.remoteAddress().port()
-                + "-" + socketFromClient.localAddress().hostAddress() + ":" + socketFromClient.localAddress().port();
-        this.logger.setContentPrefix("[" + requestID + "]");
-        getLogger().info("BEGIN HANDLING REQUEST");
-
-        socketFromClient
-                .handler(bufferFromClient -> {
-                    // Set a data handler.
-                    // As data is read, the handler will be called with the data.
-                    this.logger.setContentPrefix("[" + requestID + "] <" + protocolStepEnum.get() + ">");
-                    getLogger().info("data received from client " + bufferFromClient.length() + " bytes");
-                    getLogger().buffer(bufferFromClient);
-                    switch (protocolStepEnum.get()) {
-                        case STEP_1_CONFIRM_METHOD:
-                            handlerStep1(bufferFromClient);
-                            break;
-                        case STEP_2_AUTH_METHOD:
-                            handlerStep2(bufferFromClient);
-                            break;
-                        case STEP_3_CONFIRM_DEST:
-                            handlerStep3(bufferFromClient);
-                            break;
-                        case STEP_4_TRANSFER:
-                            handlerStep4(bufferFromClient);
-                            break;
-                    }
-                })
-                .endHandler(v -> {
-                    // Set an end handler.
-                    // Once the stream has ended, and there is no more data to be read, this handler will be called.
-                    // This handler might be called after the close handler
-                    //  when the socket is paused and there are still buffers to deliver.
-                    getLogger().notice("SOCKET END, TO CLOSE");
-                    // socketFromClient.close();
-                })
-                .exceptionHandler(throwable -> {
-                    // Set an exception handler on the read stream.
-                    getLogger().exception("SOCKET EXCEPTION, TO CLOSE", throwable);
-                    socketFromClient.close();
-                })
-                .closeHandler(v -> {
-                    getLogger().notice("与客户端的通讯 关闭");
-                });
+    protected Future<Void> whenBufferComes(Buffer buffer) {
+        // Set a data handler.
+        // As data is read, the handler will be called with the data.
+        getLogger().setContentPrefix("[" + getSocketID() + "] <" + protocolStepEnum.get() + ">");
+        getLogger().info("data received from client " + buffer.length() + " bytes");
+        getLogger().buffer(buffer);
+        switch (protocolStepEnum.get()) {
+            case STEP_1_CONFIRM_METHOD:
+                return handlerStep1(buffer);
+            case STEP_2_AUTH_METHOD:
+                return handlerStep2(buffer);
+            case STEP_3_CONFIRM_DEST:
+                return handlerStep3(buffer);
+            case STEP_4_TRANSFER:
+                return handlerStep4(buffer);
+            default:
+                return Future.failedFuture("protocolStepEnum ???");
+        }
     }
 
-    private void handlerStep1(Buffer bufferFromClient) {
+    private Future<Void> handlerStep1(Buffer bufferFromClient) {
         // 1. from client VER*1 NumberOfMETHODS*1 METHODS*NumberOfMETHODS
         byte step_1_ver = bufferFromClient.getByte(0); // 5, ignored
         if (step_1_ver != 0x05) {
             getLogger().fatal("STEP 1: VERSION IS NOT 5");
             getLogger().buffer(KeelLogLevel.WARNING, false, bufferFromClient);
             //throw new IllegalArgumentException("STEP 1: VERSION IS NOT 5");
-            closeSocket();
-            return;
+            return close();
         }
         byte numberOfMethods = bufferFromClient.getByte(1);
         List<Byte> methodsSupportedByBoth = new ArrayList<>();
@@ -111,14 +76,14 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         }
         if (methodsSupportedByBoth.size() == 0) {
             getLogger().warning("AUTH METHOD NOT MATCHED, RESPOND THIS TO CLIENT");
-            this.writeToSocketFromClient(Buffer.buffer()
-                    .appendByte((byte) 0x05)
-                    .appendByte((byte) 0xFF)
-            ).onComplete(voidAsyncResult -> {
-                getLogger().info("TO CLOSE");
-                closeSocket();
-            });
-            return;
+            return this.write(Buffer.buffer()
+                            .appendByte((byte) 0x05)
+                            .appendByte((byte) 0xFF)
+                    )
+                    .eventually(v -> {
+                        getLogger().info("TO CLOSE");
+                        return close();
+                    });
         }
 
         Byte methodByte = methodsSupportedByBoth.get(0);
@@ -126,7 +91,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         getLogger().info("AUTH METHOD BYTE IS " + methodByte);
 
         this.rahabSocks5AuthMethod = this.supportedAuthMethodMap.get(methodByte)
-                .setSocketWithClient(socketFromClient)
+                .setSocketWithClient(this)
                 .setLogger(getLogger());
         //atomicAuthMethod.set(rahabSocks5AuthMethod);
 
@@ -138,35 +103,33 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         } else {
             protocolStepEnum.set(ProtocolStepEnum.STEP_2_AUTH_METHOD);
         }
-        this.writeToSocketFromClient(Buffer.buffer()
+        return this.write(Buffer.buffer()
                         .appendByte((byte) 0x05)
                         .appendByte(methodByte)
                 )
-                .onComplete(asyncResult -> {
-                    if (asyncResult.failed()) {
-                        getLogger().exception("SEND FAILED, TO CLOSE", asyncResult.cause());
-                        closeSocket();
-                    } else {
-                        getLogger().info("AUTH METHOD CONFIRMATION SENT");
-                    }
+                .compose(done -> {
+                    getLogger().info("AUTH METHOD CONFIRMATION SENT");
+                    return Future.succeededFuture();
+                }, throwable -> {
+                    getLogger().exception("SEND FAILED, TO CLOSE", throwable);
+                    return close();
                 });
     }
 
-    private void handlerStep2(Buffer bufferFromClient) {
+    private Future<Void> handlerStep2(Buffer bufferFromClient) {
         //atomicAuthMethod.get()
-        this.rahabSocks5AuthMethod.verifyIdentity(bufferFromClient)
-                .onComplete(stringAsyncResult -> {
-                    if (stringAsyncResult.failed()) {
-                        getLogger().exception("AUTH FAILED, TO CLOSE", stringAsyncResult.cause());
-                        closeSocket();
-                    } else {
-                        getLogger().info("AUTH DONE");
-                        protocolStepEnum.set(ProtocolStepEnum.STEP_3_CONFIRM_DEST);
-                    }
+        return this.rahabSocks5AuthMethod.verifyIdentity(bufferFromClient)
+                .compose(done -> {
+                    getLogger().info("AUTH DONE");
+                    protocolStepEnum.set(ProtocolStepEnum.STEP_3_CONFIRM_DEST);
+                    return Future.succeededFuture();
+                }, throwable -> {
+                    getLogger().exception("AUTH FAILED, TO CLOSE", throwable);
+                    return close();
                 });
     }
 
-    private void handlerStep3(Buffer bufferFromClient) {
+    private Future<Void> handlerStep3(Buffer bufferFromClient) {
         int ptr = 0;
         bufferFromClient.getByte(ptr);// version 5 ignored
         ptr += 1;
@@ -227,7 +190,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
 
         if (destinationAddress == null) {
             // send 0x08
-            this.respondInStep3((byte) 0x08, addressType, new byte[]{0}, (short) 0);
+            return this.respondInStep3((byte) 0x08, addressType, new byte[]{0}, (short) 0);
         } else {
             // generate connection by client
             if (cmd == 0x01) {
@@ -241,17 +204,15 @@ class ClientConnectionHandler implements Handler<NetSocket> {
                 // It is expected that the SOCKS server will use `DST.ADDR` and DST.PORT,
                 //   and the client-side source address and port in evaluating the CONNECT request.
                 getLogger().info("CONNECT 准备连接目标服务");
-                this.clientToActualServer
+                return this.clientToActualServer
                         .connect(rawDestinationPort, destinationAddress)
-                        .onComplete(netSocketAsyncResult -> {
-                            if (netSocketAsyncResult.failed()) {
-                                // cannot !
-                                getLogger().exception("CONNECT TO TARGET FAILED, TO RESPOND AND CLOSE", netSocketAsyncResult.cause());
-                                // send 0x01 general SOCKS server failure
-                                this.respondInStep3((byte) 0x01, addressType, new byte[]{0}, (short) 0);
-                            } else {
-                                handleSocketToActualServer(netSocketAsyncResult.result());
-                            }
+                        .compose(socketToTarget -> {
+                            return handleSocketToActualServer(socketToTarget);
+                        }, throwable -> {
+                            // cannot !
+                            getLogger().exception("CONNECT TO TARGET FAILED, TO RESPOND AND CLOSE", throwable);
+                            // send 0x01 general SOCKS server failure
+                            return this.respondInStep3((byte) 0x01, addressType, new byte[]{0}, (short) 0);
                         });
             } else if (cmd == 0x02) {
                 // BIND
@@ -284,17 +245,19 @@ class ClientConnectionHandler implements Handler<NetSocket> {
 
                 getLogger().info("BIND 准备反向连接客户端");
                 getLogger().warning("目前不支持这玩意");
-                this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
+                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
             } else if (cmd == 0x03) {
                 // UDP ASSOCIATE
                 getLogger().info("UDP ASSOCIATE 准备组建UDP连接");
                 getLogger().warning("目前不支持这玩意");
-                this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
+                return this.respondInStep3((byte) 0x07, addressType, new byte[]{0}, (short) 0);
+            } else {
+                return Future.failedFuture("UNSUPPORTED CMD");
             }
         }
     }
 
-    private void respondInStep3(Byte repByte, Byte addressType, byte[] address, short port) {
+    private Future<Void> respondInStep3(Byte repByte, Byte addressType, byte[] address, short port) {
         // REP    Reply field:
         //             o  X'00' succeeded
         //             o  X'01' general SOCKS server failure
@@ -328,27 +291,28 @@ class ClientConnectionHandler implements Handler<NetSocket> {
                 .appendByte(addressType)
                 .appendBytes(address)
                 .appendShort(port);
-        this.writeToSocketFromClient(bufferToRespond)
-                .onComplete(asyncResult -> {
-                    if (asyncResult.failed()) {
-                        getLogger().exception("RESPOND <" + desc + "> FAILED", asyncResult.cause());
-                    } else {
-                        getLogger().info("RESPOND <" + desc + "> DONE");
-                    }
+        return this.write(bufferToRespond)
+                .compose(done -> {
+                    getLogger().info("RESPOND <" + desc + "> DONE");
                     if (repByte != 0x00) {
                         getLogger().error("TO CLOSE");
-                        closeSocket();
+                        return close();
+                    } else {
+                        return Future.succeededFuture();
                     }
+                }, throwable -> {
+                    getLogger().exception("RESPOND <" + desc + "> FAILED", throwable);
+                    return Future.failedFuture(throwable);
                 });
     }
 
-    private void handleSocketToActualServer(NetSocket socket) {
+    private Future<Void> handleSocketToActualServer(NetSocket socket) {
         socketToActualServer = socket;
         socketToActualServer
                 .handler(bufferFromActualServer -> {
                     getLogger().info("DATA FROM TARGET TO CLIENT, " + bufferFromActualServer.length() + " bytes");
 
-                    this.writeToSocketFromClient(bufferFromActualServer)
+                    this.write(bufferFromActualServer)
                             .onComplete(voidAsyncResult -> {
                                 if (voidAsyncResult.failed()) {
                                     getLogger().exception("FAILED TO TRANSFER DATA FROM TARGET TO CLIENT, TO CLOSE", voidAsyncResult.cause());
@@ -367,7 +331,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
                 })
                 .closeHandler(v -> {
                     getLogger().notice("CLOSE WITH TARGET, TO CLOSE WITH CLIENT");
-                    closeSocket();
+                    close();
                 });
 
         //atomicSocketToActualServer.set(socketToActualServer);
@@ -380,40 +344,17 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         short x2 = 0;
 
         // addressType rawDestinationAddress rawDestinationPort
-        this.respondInStep3((byte) 0x00, x0, x1, x2);
+        return this.respondInStep3((byte) 0x00, x0, x1, x2);
     }
 
-    private void handlerStep4(Buffer bufferFromClient) {
-        socketToActualServer.write(bufferFromClient)
-                .onComplete(voidAsyncResult -> {
-                    if (voidAsyncResult.failed()) {
-                        getLogger().exception("FAILED TO TRANSFER DATA FROM CLIENT TO TARGET", voidAsyncResult.cause());
-                        socketToActualServer.close();
-                    } else {
-                        getLogger().info("TRANSFERRED DATA FROM CLIENT TO TARGET");
-                    }
-                });
-    }
-
-    private Future<Void> writeToSocketFromClient(Buffer buffer) {
-        return this.socketFromClient.write(buffer)
-                .compose(written -> {
-                    getLogger().debug("write done to client " + buffer.length() + " bytes");
-                    getLogger().buffer(buffer);
+    private Future<Void> handlerStep4(Buffer bufferFromClient) {
+        return socketToActualServer.write(bufferFromClient)
+                .compose(done -> {
+                    getLogger().info("TRANSFERRED DATA FROM CLIENT TO TARGET");
                     return Future.succeededFuture();
                 }, throwable -> {
-                    getLogger().exception("write failed to client " + buffer.length() + " bytes", throwable);
-                    return Future.failedFuture(throwable);
+                    getLogger().exception("FAILED TO TRANSFER DATA FROM CLIENT TO TARGET", throwable);
+                    return socketToActualServer.close();
                 });
-    }
-
-    private void closeSocket() {
-        this.socketFromClient.close(asyncResult -> {
-            if (asyncResult.failed()) {
-                getLogger().exception("close socket failed", asyncResult.cause());
-            } else {
-                getLogger().info("close socket done");
-            }
-        });
     }
 }
