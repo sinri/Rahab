@@ -1,8 +1,9 @@
 package io.github.sinri.rahab.v4.periscope;
 
+import io.github.sinri.keel.web.socket.piece.KeelPiece;
 import io.vertx.core.buffer.Buffer;
 
-class Photon {
+class Photon implements KeelPiece {
     private Buffer identityBuffer;
     private Buffer contentBuffer;
 
@@ -26,6 +27,7 @@ class Photon {
      * [4 INT] y
      * [y] contentBuffer
      */
+    @Override
     public Buffer toBuffer() {
         if (this.identityBuffer == null || this.identityBuffer.length() == 0) {
             return null;

@@ -3,7 +3,7 @@ package io.github.sinri.rahab.v4.periscope;
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.controlflow.FutureUntil;
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.github.sinri.keel.servant.sisiodosi.KeelSisiodosi;
+import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
@@ -18,17 +18,15 @@ import java.util.function.Supplier;
 public class PeriscopeMirror {
     private final int port;
     private final KeelLogger logger;
-    private NetSocket socketFromLens;
+    private KeelAbstractSocketWrapper socketWrapperFromLens;
 
-    private final Map<String, NetSocket> socketToViewerMap;
-    private final KeelSisiodosi sisiodosi;
+    private final Map<String, KeelAbstractSocketWrapper> socketWrapperToViewerMap;
 
     public PeriscopeMirror(int port) {
         this.port = port;
         this.logger = Keel.standaloneLogger("PeriscopeMirror").setCategoryPrefix("SERVER");
 
-        this.socketToViewerMap = new ConcurrentHashMap<>();
-        this.sisiodosi = new KeelSisiodosi(this.getClass().getName());
+        this.socketWrapperToViewerMap = new ConcurrentHashMap<>();
     }
 
     public KeelLogger getLogger() {
@@ -37,101 +35,71 @@ public class PeriscopeMirror {
 
     public void run() {
         Keel.getVertx().createNetServer()
-                .connectHandler(socket -> {
-                    SocketAgent socketAgent = new SocketAgent(this, socket);
-                })
-                .exceptionHandler(throwable -> {
-                    logger.exception(throwable);
-                })
+                .connectHandler(socket -> SocketAgent.build(socket, this))
+                .exceptionHandler(logger::exception)
                 .listen(this.port);
     }
 
-    static class SocketAgent {
+    static class SocketAgent extends KeelAbstractSocketWrapper {
         private final PeriscopeMirror mirror;
-        private final NetSocket socket;
-        private final String identity;
         private SocketType socketType = SocketType.INIT;
         private final PhotonProcessor photonProcessor;
 
-        private final KeelLogger logger;
+        @Override
+        protected Future<Void> whenBufferComes(Buffer buffer) {
+            if (socketType == SocketType.INIT) {
+                if (buffer.toString().equals("[PeriscopeLensReport]")) {
+                    // FROM LENS: register
+                    mirror.socketWrapperFromLens = this;
+                    socketType = SocketType.LENS;
+                    return Future.succeededFuture();
+                } else {
+                    // FROM VIEWER
+                    socketType = SocketType.VIEWER;
+                    mirror.socketWrapperToViewerMap.put(getSocketID(), this);
+                }
+            }
 
-        private KeelLogger getLogger() {
-            return logger;
+            if (socketType == SocketType.LENS) {
+                // LENS
+                return handleBufferFromLens(buffer);
+            } else {
+                // VIEWER
+                if (mirror.socketWrapperFromLens == null) {
+                    getLogger().error("mirror.socketFromLens is null");
+                    return this.close();
+                }
+                Photon photon = Photon.create(getSocketID(), buffer);
+                return mirror.socketWrapperFromLens.write(photon.toBuffer());
+            }
         }
 
-        public SocketAgent(PeriscopeMirror mirror, NetSocket socket) {
+        @Override
+        protected void whenClose() {
+            super.whenClose();
+            if (socketType == SocketType.LENS) {
+                mirror.socketWrapperFromLens = null;
+            } else if (socketType == SocketType.VIEWER) {
+                mirror.socketWrapperToViewerMap.remove(getSocketID());
+            }
+        }
+
+        private SocketAgent(NetSocket socket, PeriscopeMirror mirror) {
+            super(socket, UUID.randomUUID().toString().replace("-", ""));
             this.mirror = mirror;
-            this.socket = socket;
-            this.identity = UUID.randomUUID().toString().replace("-", "");
             this.photonProcessor = new PhotonProcessor();
-            this.logger = Keel.standaloneLogger("PeriscopeMirror").setCategoryPrefix(identity);
+            setLogger(Keel.standaloneLogger("PeriscopeMirror").setCategoryPrefix(getSocketID()));
 
-            this.logger.notice("VIEWER FROM " + socket.remoteAddress().hostAddress() + ":" + socket.remoteAddress().port());
+            getLogger().notice("VIEWER FROM " + socket.remoteAddress().hostAddress() + ":" + socket.remoteAddress().port());
+        }
 
-            this.socket
-                    .handler(buffer -> {
-                        if (socketType == SocketType.INIT) {
-                            if (buffer.toString().equals("[PeriscopeLensReport]")) {
-                                // FROM LENS: register
-                                mirror.socketFromLens = socket;
-                                socketType = SocketType.LENS;
-                                return;
-                            } else {
-                                // FROM VIEWER
-                                socketType = SocketType.VIEWER;
-                                mirror.socketToViewerMap.put(identity, socket);
-                            }
-                        }
-
-                        if (socketType == SocketType.LENS) {
-                            // LENS
-                            String lockName = "LockForPeriscopeMirrorWithSocket-" + identity;
-                            Keel.getVertx().sharedData().getLock(lockName)
-                                    .compose(lock -> {
-                                        mirror.sisiodosi.drop(v -> {
-                                            return handleBufferFromLens(buffer);
-                                        });
-                                        lock.release();
-                                        return Future.succeededFuture();
-                                    }, throwable -> {
-                                        getLogger().exception("lock acquire failed", throwable);
-                                        return socket.close();
-                                    });
-                        } else {
-                            // VIEWER
-                            if (mirror.socketFromLens == null) {
-                                getLogger().error("mirror.socketFromLens is null");
-                                socket.close();
-                                return;
-                            }
-                            Photon photon = Photon.create(identity, buffer);
-                            mirror.socketFromLens.write(photon.toBuffer());
-                            if (mirror.socketFromLens.writeQueueFull()) {
-                                mirror.socketFromLens.pause();
-                            }
-                        }
-                    })
-                    .endHandler(end -> {
-                        mirror.logger.info("END");
-                    })
-                    .drainHandler(drain -> {
-                        mirror.logger.info("drain");
-                        socket.resume();
-                    })
-                    .closeHandler(close -> {
-                        mirror.logger.info("close");
-                        if (socketType == SocketType.LENS) {
-                            mirror.socketFromLens = null;
-                        } else if (socketType == SocketType.VIEWER) {
-                            mirror.socketToViewerMap.remove(identity);
-                        }
-                    });
-
+        public static SocketAgent build(NetSocket socket, PeriscopeMirror mirror) {
+            return new SocketAgent(socket, mirror);
         }
 
         public Future<Void> handleBufferFromLens(Buffer bufferFromLens) {
-            photonProcessor.receive(bufferFromLens);
-            Queue<Photon> photonQueue = photonProcessor.getPhotonQueue();
+            photonProcessor.accept(bufferFromLens);
+            Queue<Photon> photonQueue = photonProcessor.getPieceQueue();
 
             return FutureUntil.call(new Supplier<Future<Boolean>>() {
                 @Override
@@ -145,27 +113,27 @@ public class PeriscopeMirror {
                     if (Objects.equals("PeriscopeLens", viewerIdentity)) {
                         if (Objects.equals(photon.toBuffer().toString(), "PING")) {
                             // just ping!
-                            mirror.socketFromLens.write(
-                                    Photon.create("PeriscopeMirror", Buffer.buffer().appendString("PONG"))
-                                            .toBuffer()
-                            );
-                            if (mirror.socketFromLens.writeQueueFull()) {
-                                mirror.socketFromLens.pause();
-                            }
-                            return Future.succeededFuture(false);
+                            return mirror.socketWrapperFromLens.write(
+                                            Photon.create("PeriscopeMirror", Buffer.buffer().appendString("PONG"))
+                                                    .toBuffer()
+                                    )
+                                    .compose(v -> {
+                                        return Future.succeededFuture(false);
+                                    });
+
                         }
                     }
 
-                    NetSocket socketToViewer = mirror.socketToViewerMap.get(viewerIdentity);
-                    if (socketToViewer == null) {
+                    KeelAbstractSocketWrapper socketWrapperToViewer = mirror.socketWrapperToViewerMap.get(viewerIdentity);
+                    if (socketWrapperToViewer == null) {
                         getLogger().error("SOCKET TO VIEWER LOST");
                         return Future.succeededFuture(false);
                     }
-                    socketToViewer.write(photon.getContentBuffer());
-                    if (socketToViewer.writeQueueFull()) {
-                        socketToViewer.pause();
-                    }
-                    return Future.succeededFuture(false);
+                    return socketWrapperToViewer.write(photon.getContentBuffer())
+                            .compose(v -> {
+                                return Future.succeededFuture(false);
+                            });
+
                 }
             });
         }

@@ -20,7 +20,7 @@ public class RahabWormholeTest {
                 )
         );
 
-        RahabWormhole rahabWormhole = new RahabWormhole(20005, "127.0.0.1", 20002);
+        RahabWormhole rahabWormhole = new RahabWormhole(20005, "127.0.0.1", 20000);
         rahabWormhole.run();
     }
 }

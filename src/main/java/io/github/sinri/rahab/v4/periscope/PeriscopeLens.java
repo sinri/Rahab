@@ -3,7 +3,8 @@ package io.github.sinri.rahab.v4.periscope;
 import io.github.sinri.keel.Keel;
 import io.github.sinri.keel.core.controlflow.FutureUntil;
 import io.github.sinri.keel.core.logger.KeelLogger;
-import io.github.sinri.keel.servant.sisiodosi.KeelSisiodosi;
+import io.github.sinri.keel.web.socket.KeelAbstractSocketWrapper;
+import io.github.sinri.keel.web.socket.KeelBasicSocketWrapper;
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
@@ -24,10 +25,8 @@ public class PeriscopeLens {
 
     private KeelLogger logger;
 
-    private NetSocket socketToMirror;
-    private final KeelSisiodosi sisiodosi;
-    private final PhotonProcessor photonProcessor;
-    private final Map<String, NetSocket> socketToTargetMap;
+    private MirrorSocketWrapper mirrorSocketWrapper;
+    private final Map<String, KeelAbstractSocketWrapper> socketWrapperToTargetMap;
 
     public PeriscopeLens(String mirrorHost, int mirrorPort, String targetHost, int targetPort) {
         this.netClient = Keel.getVertx().createNetClient();
@@ -38,9 +37,7 @@ public class PeriscopeLens {
         this.targetPort = targetPort;
 
         this.logger = Keel.standaloneLogger("PeriscopeLens");
-        this.sisiodosi = new KeelSisiodosi(getClass().getName());
-        this.photonProcessor = new PhotonProcessor();
-        this.socketToTargetMap = new ConcurrentHashMap<>();
+        this.socketWrapperToTargetMap = new ConcurrentHashMap<>();
     }
 
     public PeriscopeLens setLogger(KeelLogger logger) {
@@ -51,150 +48,133 @@ public class PeriscopeLens {
     public void run() {
         this.netClient.connect(mirrorPort, mirrorHost)
                 .compose(socket -> {
-                    String lockName = "LockForPeriscopeLensRecordBufferFromMirror";
-                    this.socketToMirror = socket;
-                    this.socketToMirror
-                            .handler(bufferFromMirror -> {
-                                Keel.getVertx().sharedData().getLock(lockName)
-                                        .onSuccess(lock -> {
-                                            this.sisiodosi.drop(v -> this.handleBufferFromMirror(bufferFromMirror));
-                                            lock.release();
-                                        })
-                                        .onFailure(throwable -> {
-                                            this.logger.exception(lockName + " cannot be acquired", throwable);
-                                        });
+                    return Future.succeededFuture()
+                            .compose(v -> {
+                                if (this.mirrorSocketWrapper != null) {
+                                    return this.mirrorSocketWrapper.close()
+                                            .compose(closed -> {
+                                                this.mirrorSocketWrapper = null;
+                                                return Future.succeededFuture();
+                                            });
+                                } else {
+                                    return Future.succeededFuture();
+                                }
                             })
-                            .endHandler(end -> {
-                                this.logger.info("socketToMirror END");
-                            })
-                            .drainHandler(drain -> {
-                                this.logger.info("socketToMirror DRAIN");
-                                this.socketToMirror.resume();
-                            })
-                            .exceptionHandler(throwable -> {
-                                this.logger.exception("socketToMirror ERROR", throwable);
-                            })
-                            .closeHandler(close -> {
-                                this.logger.info("socketToMirror CLOSE");
-                            });
+                            .compose(v -> {
+                                this.mirrorSocketWrapper = MirrorSocketWrapper.build(socket, this);
 
-                    return this.socketToMirror.write("[PeriscopeLensReport]")
-                            .onSuccess(written -> {
-                                Keel.getVertx().setTimer(10_000L, timer -> {
-                                    ping();
-                                });
+                                return mirrorSocketWrapper.write("[PeriscopeLensReport]")
+                                        .onSuccess(written -> Keel.getVertx().setTimer(10_000L, timer -> ping()));
                             });
-                }, throwable -> {
+                })
+                .recover(throwable -> {
                     this.logger.exception("CONNECT FAILED", throwable);
                     return Keel.getVertx().close();
                 });
     }
 
     private void ping() {
-        this.socketToMirror.write(
-                        Photon.create("PeriscopeLens", Buffer.buffer().appendString("PING"))
-                                .toBuffer()
-                )
+        Buffer buffer = Photon.create("PeriscopeLens", Buffer.buffer().appendString("PING"))
+                .toBuffer();
+        this.mirrorSocketWrapper.write(buffer)
                 .onFailure(throwable -> {
                     logger.debug("PING SENDING FAILED, TO RESTART LATER");
-                    Keel.getVertx().setTimer(10_000L, timer -> {
-                        this.socketToMirror.close();
-                        this.socketToMirror = null;
-                        run();
-                    });
+                    Keel.getVertx().setTimer(10_000L, timer -> run());
                 })
                 .onSuccess(done -> {
                     logger.debug("PING SENT");
-                    Keel.getVertx().setTimer(10_000L, timer -> {
-                        ping();
-                    });
+                    Keel.getVertx().setTimer(10_000L, timer -> ping());
                 });
-        if (this.socketToMirror.writeQueueFull()) {
-            this.socketToMirror.pause();
-        }
     }
 
-    /**
-     * THREAD SAFE NEEDED!
-     * RUN IN SISIODOSI.
-     */
-    private Future<Void> handleBufferFromMirror(Buffer bufferFromMirror) {
-        this.photonProcessor.receive(bufferFromMirror);
-        Queue<Photon> photonQueue = this.photonProcessor.getPhotonQueue();
-        return FutureUntil.call(
-                new Supplier<Future<Boolean>>() {
-                    @Override
-                    public Future<Boolean> get() {
-                        Photon photon = photonQueue.poll();
-                        if (photon == null) {
-                            return Future.succeededFuture(true);
+
+    private Future<KeelAbstractSocketWrapper> getSocketToTargetMap(String identity) {
+        KeelAbstractSocketWrapper socketWrapper = this.socketWrapperToTargetMap.get(identity);
+        if (socketWrapper != null) {
+            return Future.succeededFuture(socketWrapper);
+        }
+        return this.netClient.connect(this.targetPort, this.targetHost)
+                .compose(socketCreatedToTarget -> {
+                    KeelBasicSocketWrapper socketWrapperCreated = new KeelBasicSocketWrapper(socketCreatedToTarget)
+                            .setIncomingBufferProcessor(buffer -> {
+                                Photon photon = Photon.create(Buffer.buffer(identity), buffer);
+                                return this.mirrorSocketWrapper.write(photon.toBuffer());
+                            })
+                            .setCloseHandler(closed -> {
+                                this.socketWrapperToTargetMap.remove(identity);
+                            });
+
+                    this.socketWrapperToTargetMap.put(identity, socketWrapperCreated);
+                    return Future.succeededFuture(socketWrapperCreated);
+                });
+    }
+
+    static class MirrorSocketWrapper extends KeelAbstractSocketWrapper {
+
+        private final PeriscopeLens lens;
+        private final PhotonProcessor photonProcessor;
+
+        private MirrorSocketWrapper(NetSocket socket, PeriscopeLens lens) {
+            super(socket);
+            this.lens = lens;
+            this.photonProcessor = new PhotonProcessor();
+        }
+
+        public static MirrorSocketWrapper build(NetSocket socket, PeriscopeLens lens) {
+            return new MirrorSocketWrapper(socket, lens);
+        }
+
+        @Override
+        protected Future<Void> whenBufferComes(Buffer buffer) {
+            return this.handleBufferFromMirror(buffer);
+        }
+
+        /**
+         * THREAD SAFE NEEDED!
+         * RUN IN SISIODOSI.
+         */
+        private Future<Void> handleBufferFromMirror(Buffer bufferFromMirror) {
+            this.photonProcessor.accept(bufferFromMirror);
+            Queue<Photon> photonQueue = this.photonProcessor.getPieceQueue();
+            return FutureUntil.call(
+                    new Supplier<Future<Boolean>>() {
+                        @Override
+                        public Future<Boolean> get() {
+                            Photon photon = photonQueue.poll();
+                            if (photon == null) {
+                                return Future.succeededFuture(true);
+                            }
+                            return Future.succeededFuture()
+                                    .compose(v -> handlePhoton(photon))
+                                    .compose(handled -> {
+                                        return Future.succeededFuture(false);
+                                    }, throwable -> {
+                                        lens.logger.exception(throwable);
+                                        return Future.succeededFuture(false);
+                                    });
                         }
-                        return Future.succeededFuture()
-                                .compose(v -> handlePhoton(photon))
-                                .compose(handled -> {
-                                    return Future.succeededFuture(false);
-                                }, throwable -> {
-                                    logger.exception(throwable);
-                                    return Future.succeededFuture(false);
-                                });
                     }
-                }
-        );
-    }
-
-    private Future<Void> handlePhoton(Photon photon) {
-        // 1. seek/create the socket to target of terminal
-        String identity = photon.getIdentityBuffer().toString();
-        Buffer contentBuffer = photon.getContentBuffer();
-
-        if (Objects.equals("PeriscopeMirror", identity)) {
-            if (Objects.equals("PONG", contentBuffer.toString())) {
-                logger.debug("PONG received");
-                return Future.succeededFuture();
-            }
+            );
         }
 
-        return getSocketToTargetMap(identity)
-                .compose(socket -> {
-                    // 2. send buffer to it
-                    Future<Void> writeFuture = socket.write(contentBuffer);
-                    if (socket.writeQueueFull()) {
-                        socket.pause();
-                    }
-                    return writeFuture;
-                });
+        private Future<Void> handlePhoton(Photon photon) {
+            // 1. seek/create the socket to target of terminal
+            String identity = photon.getIdentityBuffer().toString();
+            Buffer contentBuffer = photon.getContentBuffer();
 
-    }
+            if (Objects.equals("PeriscopeMirror", identity)) {
+                if (Objects.equals("PONG", contentBuffer.toString())) {
+                    lens.logger.debug("PONG received");
+                    return Future.succeededFuture();
+                }
+            }
 
-    private Future<NetSocket> getSocketToTargetMap(String identity) {
-        NetSocket netSocket = this.socketToTargetMap.get(identity);
-        if (netSocket == null) {
-            return this.netClient.connect(this.targetPort, this.targetHost)
-                    .compose(socketCreatedToTarget -> {
-                        socketCreatedToTarget
-                                .handler(buffer -> {
-                                    Photon photon = Photon.create(Buffer.buffer(identity), buffer);
-                                    this.socketToMirror.write(photon.toBuffer());
-                                    if (this.socketToMirror.writeQueueFull()) {
-                                        this.socketToMirror.pause();
-                                    }
-                                })
-                                .endHandler(end -> {
-                                    logger.debug("end");
-                                })
-                                .drainHandler(drain -> {
-                                    logger.debug("drain");
-                                    socketCreatedToTarget.resume();
-                                })
-                                .closeHandler(close -> {
-                                    logger.info("close");
-                                    this.socketToTargetMap.remove(identity);
-                                });
-                        this.socketToTargetMap.put(identity, socketCreatedToTarget);
-                        return Future.succeededFuture(socketCreatedToTarget);
+            return lens.getSocketToTargetMap(identity)
+                    .compose(socketWrapper -> {
+                        // 2. send buffer to it
+                        return socketWrapper.write(contentBuffer);
                     });
-        } else {
-            return Future.succeededFuture(netSocket);
+
         }
     }
 }
