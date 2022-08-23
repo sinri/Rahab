@@ -22,7 +22,7 @@ public class RahabWormholeWorker {
         this.clientToTarget = clientToTarget;
         this.targetPort = targetPort;
         this.targetHost = targetHost;
-        this.logger = Keel.outputLogger("RahabWormholeServerWorker");
+        this.logger = Keel.standaloneLogger("RahabWormholeServerWorker");
     }
 
     public KeelLogger getLogger() {

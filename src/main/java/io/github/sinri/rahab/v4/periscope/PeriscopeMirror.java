@@ -66,6 +66,8 @@ public class PeriscopeMirror {
             this.photonProcessor = new PhotonProcessor();
             this.logger = Keel.standaloneLogger("PeriscopeMirror").setCategoryPrefix(identity);
 
+            this.logger.notice("VIEWER FROM " + socket.remoteAddress().hostAddress() + ":" + socket.remoteAddress().port());
+
             this.socket
                     .handler(buffer -> {
                         if (socketType == SocketType.INIT) {

@@ -27,7 +27,7 @@ public class RahabSocks5Proxy {
                 new NetServerOptions()
                         .setPort(listenPort)
         );
-        this.logger = Keel.outputLogger("RahabSocks5Proxy");
+        this.logger = Keel.standaloneLogger("RahabSocks5Proxy");
         this.supportedAuthMethodMap = supportedAuthMethodMap;
         this.clientToActualServer = Keel.getVertx().createNetClient();
     }

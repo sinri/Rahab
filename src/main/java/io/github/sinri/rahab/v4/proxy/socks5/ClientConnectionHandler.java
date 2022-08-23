@@ -1,6 +1,7 @@
 package io.github.sinri.rahab.v4.proxy.socks5;
 
 import io.github.sinri.keel.Keel;
+import io.github.sinri.keel.core.logger.KeelLogLevel;
 import io.github.sinri.keel.core.logger.KeelLogger;
 import io.github.sinri.rahab.v4.proxy.socks5.auth.RahabSocks5AuthMethod;
 import io.vertx.core.Future;
@@ -29,7 +30,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
     private final AtomicReference<ProtocolStepEnum> protocolStepEnum = new AtomicReference<>(ProtocolStepEnum.STEP_1_CONFIRM_METHOD);
 
     public ClientConnectionHandler(Map<Byte, RahabSocks5AuthMethod> supportedAuthMethodMap, NetClient clientToActualServer) {
-        this.logger = Keel.outputLogger("RahabSocks5Proxy");
+        this.logger = Keel.standaloneLogger("RahabSocks5Proxy");
         this.supportedAuthMethodMap = supportedAuthMethodMap;
         this.clientToActualServer = clientToActualServer;
     }
@@ -94,6 +95,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         byte step_1_ver = bufferFromClient.getByte(0); // 5, ignored
         if (step_1_ver != 0x05) {
             getLogger().fatal("STEP 1: VERSION IS NOT 5");
+            getLogger().buffer(KeelLogLevel.WARNING, false, bufferFromClient);
             //throw new IllegalArgumentException("STEP 1: VERSION IS NOT 5");
             closeSocket();
             return;
@@ -221,7 +223,7 @@ class ClientConnectionHandler implements Handler<NetSocket> {
         short rawDestinationPort = bufferFromClient.getShort(ptr);
         ptr += 2;
 
-        getLogger().debug("TARGET " + destinationAddress + ":" + rawDestinationPort);
+        getLogger().notice("TARGET " + destinationAddress + ":" + rawDestinationPort);
 
         if (destinationAddress == null) {
             // send 0x08
