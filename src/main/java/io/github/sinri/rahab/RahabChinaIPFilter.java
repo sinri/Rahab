@@ -1,11 +1,10 @@
 package io.github.sinri.rahab;
 
-import io.github.sinri.keel.Keel;
-import io.github.sinri.keel.core.logger.KeelLogger;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.json.JsonArray;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -20,16 +19,15 @@ public class RahabChinaIPFilter {
 
     private RahabChinaIPFilter() {
         list = new ArrayList<>();
-        try {
-            byte[] bytes = Keel.fileHelper().readFileAsByteArray("ip.china.json", true);
+        try (InputStream input = RahabChinaIPFilter.class.getResourceAsStream("/ip.china.json")) {
+            if (input == null) throw new IOException("Missing ip.china.json");
+            byte[] bytes = input.readAllBytes();
             JsonArray array = new JsonArray(Buffer.buffer(bytes));
             array.forEach(item -> list.add(Long.parseLong(item.toString())));
         } catch (IOException exception) {
-            Keel.outputLogger("RahabChinaIPFilter").exception(exception);
+            System.getLogger("RahabChinaIPFilter").log(System.Logger.Level.ERROR, "Cannot load IP ranges", exception);
         }
-//        for (var item : list) {
-//            System.out.println(item+ " : "+Keel.netHelper().convertNumberToIPv4(item));
-//        }
+
     }
 
     public static RahabChinaIPFilter getInstance() {
@@ -37,18 +35,18 @@ public class RahabChinaIPFilter {
     }
 
     public boolean isChinaMainlandIP(String ip) {
-        KeelLogger logger = Keel.outputLogger("RahabChinaIPFilter");
+        System.Logger logger = System.getLogger("RahabChinaIPFilter");
         if (ip == null) {
-            logger.warning("ip is null");
+            logger.log(System.Logger.Level.WARNING, "ip is null");
         }
-        Long x = Keel.netHelper().convertIPv4ToNumber(ip);
+        Long x = ipv4Number(ip);
         if (x == null) {
-            logger.warning("ip [" + ip + "] is invalid");
+            logger.log(System.Logger.Level.WARNING, "ip [" + ip + "] is invalid");
             return true;
         }
         int total = this.list.size();
         if (total == 0 || total % 2 != 0) {
-            logger.warning("TOTAL ERROR: " + total);
+            logger.log(System.Logger.Level.WARNING, "TOTAL ERROR: " + total);
             return true;
         }
         if (x < this.list.get(0)) {
@@ -81,6 +79,20 @@ public class RahabChinaIPFilter {
                 return left % 2 == 0;
             }
         }
+    }
+
+    private static Long ipv4Number(String ip) {
+        if (ip == null) return null;
+        String[] parts = ip.split("\\.", -1);
+        if (parts.length != 4) return null;
+        long number = 0;
+        for (String part : parts) {
+            if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(c -> c >= '0' && c <= '9')) return null;
+            int value = Integer.parseInt(part);
+            if (value > 255) return null;
+            number = (number << 8) | value;
+        }
+        return number;
     }
 
     public static void main(String[] args) {

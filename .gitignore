@@ -93,3 +93,6 @@ hs_err_pid*
 src/main/resources/config.properties
 src/test/resources/v2/config.properties
 debug/
+
+# Local runtime configuration can contain credentials.
+/config.properties
