@@ -6,6 +6,8 @@ Rahab 是直接基于 Vert.x 的异步 TCP 转发、SOCKS5 代理和反向隧道
 `v5` 从 `v4` 分支重构，使用 Vert.x **5.2.2**，不再依赖 Keel。
 维护范围为原 `v4` 默认入口的四种模式；旧 `v4a` 的 HTTP CONNECT、Liaison、Consulate 和 HTTP 数据变换不再编译或发布，历史源码保留在 `v4` 分支。
 
+完整的配置参考、四种模式的操作步骤、跨机器部署及故障排查见 [v5 使用说明](docs/v5-usage.md)。
+
 ## 构建与启动
 
 需要 JDK 17+ 和 Maven 3.9+：
@@ -15,6 +17,8 @@ mvn clean verify
 java -jar target/Rahab-5.0-SNAPSHOT.jar --help
 java -jar target/Rahab-5.0-SNAPSHOT.jar examples/wormhole.properties
 ```
+
+`mvn package`（或上面的 `mvn clean verify`）会直接生成包含运行依赖的 **fat JAR**：`target/Rahab-5.0-SNAPSHOT.jar`，可单独复制到部署机器运行，无需额外依赖目录。`target/original-Rahab-5.0-SNAPSHOT.jar` 是不含完整依赖的原始产物，不用于独立部署。
 
 无参数时读取当前目录的 `config.properties`。配置错误、端口占用或首次建立隧道失败会以非零状态退出。Ctrl+C 关闭 Vert.x 和网络资源。DNS 默认使用系统配置，可通过顶层 `dns.servers=1.1.1.1,8.8.8.8` 覆盖。日志使用 JDK/Vert.x 默认日志实现，旧 Keel 的 `log.*` 配置已移除。
 
